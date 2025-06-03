@@ -1,556 +1,235 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
-import { Stage, Layer, Image as KonvaImage, Transformer, Rect } from "react-konva";
+import React, { useEffect, useRef, useState } from "react";
+import { Stage, Layer, Image as KonvaImage } from "react-konva";
+import Konva from "konva";
+import { Images } from "@/utils/Images";
 
 export default function ImageEditor() {
-  const fileInputRef = useRef(null);
-  const stageRef = useRef(null);
+  const [loadedImages, setLoadedImages] = useState([]);
+  const [highlightImage, setHighlightImage] = useState(null);
+  const [highlightVisible, setHighlightVisible] = useState(false);
+  const [backgroundImage, setBackgroundImage] = useState(null); // 🔥 background image
 
-  const [imageFile, setImageFile] = useState(null);
-  const [originalImageObj, setOriginalImageObj] = useState(null);
-  const [imageObj, setImageObj] = useState(null); 
-  const [selected, setSelected] = useState(false);
-  const [showCropRect, setShowCropRect] = useState(false);
+  const highlightRef = useRef(null);
+  const canvasRef = useRef(null);
+  const processCanvasRef = useRef(null);
 
-  const [lastCropData, setLastCropData] = useState(null);
+  const BLACK_THRESHOLD = 50;
+  const COLOR_TOLERANCE = 20;
 
-  const cropRectRef = useRef();
-  const cropTransformerRef = useRef();
-  const transformerRef = useRef(); 
-  const imageNodeRef = useRef(); 
-
-  const stageWidth = 750;
-  const stageHeight = 750;
-
-  const [imageProps, setImageProps] = useState({
-    x: 50,
-    y: 50,
-    scaleX: 1,
-    scaleY: 1,
-    rotation: 0,
-    width: 0,
-    height: 0,
-  });
-
-  const [cropArea, setCropArea] = useState({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-  });
-
+  // 🔥 Load background image (frame.jpg)
   useEffect(() => {
-    if (!imageFile) return;
+    const bg = new window.Image();
+    bg.src = "/frame.jpg"; // ✅ Make sure frame.jpg is in your public folder
+    bg.onload = () => setBackgroundImage(bg);
+  }, []);
 
-    const img = new window.Image();
-    img.src = URL.createObjectURL(imageFile);
-    img.onload = () => {
-      let newWidth = img.width;
-      let newHeight = img.height;
+  const removeBlackBackground = (img) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
 
-      if (img.width > stageWidth || img.height > stageHeight) {
-        const widthRatio = stageWidth / img.width;
-        const heightRatio = stageHeight / img.height;
-        const scale = Math.min(widthRatio, heightRatio);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
 
-        newWidth = img.width * scale;
-        newHeight = img.height * scale;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        if (r < BLACK_THRESHOLD && g < BLACK_THRESHOLD && b < BLACK_THRESHOLD) {
+          data[i + 3] = 0;
+        }
       }
 
-      setOriginalImageObj(img); 
-      setImageObj(img); 
+      ctx.putImageData(imageData, 0, 0);
 
-      setImageProps({
-        x: (stageWidth - newWidth) / 2,
-        y: (stageHeight - newHeight) / 2,
-        scaleX: newWidth / img.width, 
-        scaleY: newHeight / img.height,
-        rotation: 0,
-        width: img.width, 
-        height: img.height, 
-      });
-
-      setCropArea({
-        x: (stageWidth - newWidth) / 2,
-        y: (stageHeight - newHeight) / 2,
-        width: newWidth,
-        height: newHeight,
-      });
-
-      setLastCropData(null); 
-      setSelected(false);
-      setShowCropRect(false);
-    };
-
-    return () => {
-      if (img.src) URL.revokeObjectURL(img.src);
-    };
-  }, [imageFile, stageWidth, stageHeight]);
-
-  useEffect(() => {
-    if (selected && !showCropRect && transformerRef.current && imageNodeRef.current) {
-      transformerRef.current.nodes([imageNodeRef.current]);
-      transformerRef.current.getLayer().batchDraw();
-    } else if (transformerRef.current) {
-      transformerRef.current.nodes([]);
-      transformerRef.current.getLayer().batchDraw();
-    }
-  }, [selected, imageObj, showCropRect]);
-
-  useEffect(() => {
-    if (showCropRect && cropTransformerRef.current && cropRectRef.current) {
-      cropTransformerRef.current.nodes([cropRectRef.current]);
-      cropTransformerRef.current.getLayer().batchDraw();
-    } else if (!showCropRect && cropTransformerRef.current) {
-      cropTransformerRef.current.nodes([]);
-      cropTransformerRef.current.getLayer().batchDraw();
-    }
-  }, [showCropRect]);
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type.startsWith("image/")) {
-      setImageFile(file);
-    }
-  };
-
-  const handleStageClick = (e) => {
-    if (e.target === e.target.getStage() || e.target.getParent() === e.target.getStage()) {
-      setSelected(false);
-    }
-  };
-
-  const handleCrop = () => {
-    const imageNode = imageNodeRef.current; 
-    const cropNode = cropRectRef.current; 
-
-    if (!imageNode || !cropNode || !originalImageObj) return;
-
-    const originalImageDisplayProps = {
-      x: imageNode.x(),
-      y: imageNode.y(),
-      scaleX: imageNode.scaleX(),
-      scaleY: imageNode.scaleY(),
-      rotation: imageNode.rotation(),
-      width: imageNode.width(), 
-      height: imageNode.height(), 
-    };
-
-    const cropDisplayX = cropNode.x();
-    const cropDisplayY = cropNode.y();
-    const cropDisplayWidth = cropNode.width() * cropNode.scaleX();
-    const cropDisplayHeight = cropNode.height() * cropNode.scaleY();
-
-    const imageAbsoluteTransform = imageNode.getAbsoluteTransform().copy();
-    imageAbsoluteTransform.invert();
-
-    const p1 = imageAbsoluteTransform.point({ x: cropDisplayX, y: cropDisplayY });
-    const p2 = imageAbsoluteTransform.point({
-      x: cropDisplayX + cropDisplayWidth,
-      y: cropDisplayY + cropDisplayHeight,
+      const newImg = new window.Image();
+      newImg.onload = () => resolve(newImg);
+      newImg.src = canvas.toDataURL();
     });
+  };
 
-    let sourceX = p1.x;
-    let sourceY = p1.y;
-    let sourceWidth = p2.x - p1.x;
-    let sourceHeight = p2.y - p1.y;
+  useEffect(() => {
+    const loadImages = async () => {
+      const entries = Object.entries(Images.segments);
+      const promises = entries.map(([name, base64]) => {
+        return new Promise((resolve, reject) => {
+          const img = new window.Image();
+          img.crossOrigin = "Anonymous";
+          img.src = `data:image/png;base64,${base64}`;
+          img.onload = async () => {
+            const processedImg = await removeBlackBackground(img);
+            resolve({ name, image: processedImg });
+          };
+          img.onerror = reject;
+        });
+      });
 
-    const finalSourceX = Math.max(0, sourceX);
-    const finalSourceY = Math.max(0, sourceY);
-    const finalSourceWidth = Math.min(originalImageObj.width - finalSourceX, sourceWidth);
-    const finalSourceHeight = Math.min(originalImageObj.height - finalSourceY, sourceHeight);
+      try {
+        const results = await Promise.all(promises);
+        setLoadedImages(results);
+      } catch (error) {
+        console.error("Image loading failed:", error);
+      }
+    };
 
-    const canvas = document.createElement("canvas");
-    canvas.width = finalSourceWidth; 
-    canvas.height = finalSourceHeight; 
+    loadImages();
+  }, []);
 
+  const maxWidth = Math.max(
+    ...loadedImages.map(({ image }) => image.width || 0),
+    backgroundImage?.width || 300,
+  );
+  const maxHeight = Math.max(
+    ...loadedImages.map(({ image }) => image.height || 0),
+    backgroundImage?.height || 300,
+  );
+
+  const isSimilarColor = (r1, g1, b1, r2, g2, b2, tolerance) => {
+    return (
+      Math.abs(r1 - r2) <= tolerance &&
+      Math.abs(g1 - g2) <= tolerance &&
+      Math.abs(b1 - b2) <= tolerance
+    );
+  };
+
+  const handleMouseMove = (evt) => {
+    const stage = evt.target.getStage();
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
+
+    const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    ctx.save();
-    ctx.drawImage(
-      originalImageObj, 
-      finalSourceX, 
-      finalSourceY, 
-      finalSourceWidth, 
-      finalSourceHeight, 
-      0, 
-      0, 
-      finalSourceWidth, 
-      finalSourceHeight 
-    );
-    ctx.restore();
+    for (let i = loadedImages.length - 1; i >= 0; i--) {
+      const imageObj = loadedImages[i].image;
 
-    const croppedImage = new window.Image();
-    croppedImage.src = canvas.toDataURL();
-    croppedImage.onload = () => {
-      setImageObj(croppedImage); 
+      canvas.width = imageObj.width;
+      canvas.height = imageObj.height;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(imageObj, 0, 0);
 
-      const newScaleX = cropDisplayWidth / croppedImage.width;
-      const newScaleY = cropDisplayHeight / croppedImage.height;
+      const { x, y } = pointer;
+      const px = Math.floor(x);
+      const py = Math.floor(y);
 
-      setImageProps({
-        x: cropDisplayX, 
-        y: cropDisplayY,
-        scaleX: newScaleX, 
-        scaleY: newScaleY,
-        width: croppedImage.width,
-        height: croppedImage.height, 
-        rotation: originalImageDisplayProps.rotation, 
-      });
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      if (px < 0 || py < 0 || px >= imageData.width || py >= imageData.height) continue;
 
-      setShowCropRect(false); 
-      setSelected(false); 
+      const index = (py * imageData.width + px) * 4;
+      const r = imageData.data[index];
+      const g = imageData.data[index + 1];
+      const b = imageData.data[index + 2];
+      const a = imageData.data[index + 3];
 
-      setLastCropData({
-        cropRect: {
-          x: cropDisplayX,
-          y: cropDisplayY,
-          width: cropDisplayWidth,
-          height: cropDisplayHeight,
-        },
-        imagePropsAtCrop: originalImageDisplayProps,
-      });
-    };
+      if (a !== 0) {
+        console.log("Hovered image index:", i);
+
+        // 👉 Pass image and index
+        highlightMatchingPixels(imageObj, { r, g, b }, i);
+        break; // ✅ Break loop after match
+      }
+    }
+
+    fadeOutHighlight();
   };
 
-  const handleDownload = () => {
-    if (!stageRef.current || !imageObj) return;
+  const highlightMatchingPixels = (imageObj, targetRGBA) => {
+    const tempCanvas = processCanvasRef.current;
+    const ctx = tempCanvas.getContext("2d");
 
-    const cropRectNode = cropRectRef.current;
-    const cropTransformerNode = cropTransformerRef.current;
-    const transformerNode = transformerRef.current;
+    tempCanvas.width = imageObj.width;
+    tempCanvas.height = imageObj.height;
 
-    let cropRectVisible = false;
-    let cropTransformerVisible = false;
-    let transformerVisible = false;
+    ctx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+    ctx.drawImage(imageObj, 0, 0);
 
-    if (cropRectNode) {
-      cropRectVisible = cropRectNode.visible();
-      cropRectNode.visible(false);
+    const imageData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+
+      if (
+        a > 0 &&
+        isSimilarColor(r, g, b, targetRGBA.r, targetRGBA.g, targetRGBA.b, COLOR_TOLERANCE)
+      ) {
+        data[i] = 255;
+        data[i + 1] = 0;
+        data[i + 2] = 0;
+        data[i + 3] = 128;
+      } else {
+        data[i + 3] = 0;
+      }
     }
-    if (cropTransformerNode) {
-      cropTransformerVisible = cropTransformerNode.visible();
-      cropTransformerNode.visible(false);
+
+    ctx.putImageData(imageData, 0, 0);
+
+    const img = new window.Image();
+    img.onload = () => {
+      setHighlightImage(img);
+      setHighlightVisible(true);
+      fadeInHighlight();
+    };
+    img.src = tempCanvas.toDataURL();
+  };
+
+  const fadeInHighlight = () => {
+    if (highlightRef.current) {
+      new Konva.Tween({
+        node: highlightRef.current,
+        duration: 0.4,
+        opacity: 1,
+        easing: Konva.Easings.EaseInOut,
+      }).play();
     }
-    if (transformerNode) {
-      transformerVisible = transformerNode.visible();
-      transformerNode.visible(false);
+  };
+
+  const fadeOutHighlight = () => {
+    if (highlightRef.current) {
+      new Konva.Tween({
+        node: highlightRef.current,
+        duration: 1,
+        opacity: 0,
+        easing: Konva.Easings.EaseInOut,
+      }).play();
     }
-
-    stageRef.current.batchDraw(); 
-
-    requestAnimationFrame(() => {
-      const dataURL = stageRef.current.toDataURL({
-        mimeType: "image/png",
-        pixelRatio: 2,
-      });
-
-      const link = document.createElement("a");
-      link.href = dataURL;
-      link.download = "edited-image.png";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      if (cropRectNode) cropRectNode.visible(cropRectVisible);
-      if (cropTransformerNode) cropTransformerNode.visible(cropTransformerVisible);
-      if (transformerNode) transformerNode.visible(transformerVisible);
-      stageRef.current.batchDraw(); 
-    });
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-100">
-      <input
-        type="file"
-        accept="image/*"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        style={{ display: "none" }}
-      />
-      <div className="flex space-x-4 mb-6">
-        <button
-          onClick={() => fileInputRef.current.click()}
-          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          Upload Image
-        </button>
-        <button
-          onClick={() => {
-            if (originalImageObj) {
-              setShowCropRect((prev) => {
-                const isEnteringCropMode = !prev;
+    <div className="min-h-screen p-6 bg-white flex flex-col items-center">
+      {/* Hidden canvases */}
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+      <canvas ref={processCanvasRef} style={{ display: "none" }} />
 
-                if (isEnteringCropMode) {
-                  setImageObj(originalImageObj); 
-
-                  if (lastCropData) {
-                    setImageProps(lastCropData.imagePropsAtCrop);
-                    setCropArea({
-                      x: lastCropData.cropRect.x,
-                      y: lastCropData.cropRect.y,
-                      width: lastCropData.cropRect.width,
-                      height: lastCropData.cropRect.height,
-                    });
-                  } else {
-                    let newWidth = originalImageObj.width;
-                    let newHeight = originalImageObj.height;
-
-                    if (
-                      originalImageObj.width > stageWidth ||
-                      originalImageObj.height > stageHeight
-                    ) {
-                      const widthRatio = stageWidth / originalImageObj.width;
-                      const heightRatio = stageHeight / originalImageObj.height;
-                      const scale = Math.min(widthRatio, heightRatio);
-
-                      newWidth = originalImageObj.width * scale;
-                      newHeight = originalImageObj.height * scale;
-                    }
-
-                    setImageProps({
-                      x: (stageWidth - newWidth) / 2,
-                      y: (stageHeight - newHeight) / 2,
-                      scaleX: newWidth / originalImageObj.width,
-                      scaleY: newHeight / originalImageObj.height,
-                      rotation: 0,
-                      width: originalImageObj.width,
-                      height: originalImageObj.height,
-                    });
-
-                    setCropArea({
-                      x: (stageWidth - newWidth) / 2,
-                      y: (stageHeight - newHeight) / 2,
-                      width: newWidth,
-                      height: newHeight,
-                    });
-                  }
-                }
-                return !prev; 
-              });
-              setSelected(false); 
-            }
-          }}
-          className="px-6 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50"
-          disabled={!originalImageObj}
-        >
-          {showCropRect ? "Cancel Crop" : "Crop Image"}
-        </button>
-        {showCropRect && (
-          <button
-            onClick={handleCrop}
-            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
-          >
-            Apply Crop
-          </button>
-        )}
-        <button
-          onClick={handleDownload}
-          className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-          disabled={!imageObj}
-        >
-          Download Image
-        </button>
-      </div>
-
-      <div
-        style={{
-          border: "2px solid #ccc",
-          borderRadius: 8,
-          width: stageWidth,
-          height: stageHeight,
-          backgroundColor: "#fff",
-        }}
-      >
+      {loadedImages.length === 0 ? (
+        <p>Loading images...</p>
+      ) : (
         <Stage
-          width={stageWidth}
-          height={stageHeight}
-          onMouseDown={handleStageClick}
-          onTouchStart={handleStageClick}
-          style={{ cursor: selected && !showCropRect ? "move" : "default" }}
-          ref={stageRef}
+          width={maxWidth}
+          height={maxHeight}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={fadeOutHighlight}
         >
           <Layer>
-            {imageObj && (
-              <>
-                <KonvaImage
-                  image={imageObj}
-                  x={imageProps.x}
-                  y={imageProps.y}
-                  scaleX={imageProps.scaleX}
-                  scaleY={imageProps.scaleY}
-                  rotation={imageProps.rotation}
-                  width={imageProps.width} 
-                  height={imageProps.height} 
-                  draggable={!showCropRect} 
-                  onClick={() => !showCropRect && setSelected(true)} 
-                  ref={imageNodeRef}
-                  onTransformEnd={(e) => {
-                    const node = imageNodeRef.current;
-                    setImageProps({
-                      x: node.x(),
-                      y: node.y(),
-                      width: node.width(), 
-                      height: node.height(),
-                      scaleX: node.scaleX(), 
-                      scaleY: node.scaleY(),
-                      rotation: node.rotation(),
-                    });
-                  }}
-                  onDragEnd={(e) => {
-                    const node = imageNodeRef.current;
-                    setImageProps((prevProps) => ({
-                      ...prevProps,
-                      x: node.x(),
-                      y: node.y(),
-                    }));
-                  }}
-                />
-                {selected && !showCropRect && (
-                  <Transformer
-                    ref={transformerRef}
-                    rotateEnabled={true}
-                    enabledAnchors={[
-                      "top-left",
-                      "top-center",
-                      "top-right",
-                      "middle-left",
-                      "middle-right",
-                      "bottom-left",
-                      "bottom-center",
-                      "bottom-right",
-                    ]}
-                    boundBoxFunc={(oldBox, newBox) => {
-                      if (
-                        newBox.width * newBox.scaleX < 30 ||
-                        newBox.height * newBox.scaleY < 30
-                      ) {
-                        return oldBox;
-                      }
-                      return newBox;
-                    }}
-                  />
-                )}
-              </>
-            )}
+            {/* 🔥 Background image is rendered first */}
+            {backgroundImage && <KonvaImage image={backgroundImage} x={0} y={0} />}
 
-            {showCropRect && (
-              <>
-                <Rect
-                  ref={cropRectRef}
-                  x={cropArea.x}
-                  y={cropArea.y}
-                  width={cropArea.width}
-                  height={cropArea.height}
-                  fill="rgba(0,0,0,0.5)"
-                  stroke="yellow"
-                  strokeWidth={2}
-                  draggable
-                  dragBoundFunc={(pos) => {
-                    const imageNode = imageNodeRef.current;
-                    if (!imageNode) return pos;
+            {loadedImages.map(({ name, image }) => (
+              <KonvaImage key={name} image={image} />
+            ))}
 
-                    const imageClientRect = imageNode.getClientRect();
-                    let newX = pos.x;
-                    let newY = pos.y;
-                    const cropWidth = cropRectRef.current.width() * cropRectRef.current.scaleX();
-                    const cropHeight = cropRectRef.current.height() * cropRectRef.current.scaleY();
-
-                    if (newX < imageClientRect.x) newX = imageClientRect.x;
-                    if (newY < imageClientRect.y) newY = imageClientRect.y;
-                    if (newX + cropWidth > imageClientRect.x + imageClientRect.width) {
-                      newX = imageClientRect.x + imageClientRect.width - cropWidth;
-                    }
-                    if (newY + cropHeight > imageClientRect.y + imageClientRect.height) {
-                      newY = imageClientRect.y + imageClientRect.height - cropHeight;
-                    }
-                    return { x: newX, y: newY };
-                  }}
-                  onTransformEnd={() => {
-                    const node = cropRectRef.current;
-                    const scaleX = node.scaleX();
-                    const scaleY = node.scaleY();
-
-                    node.scaleX(1);
-                    node.scaleY(1);
-
-                    setCropArea({
-                      x: node.x(),
-                      y: node.y(),
-                      width: Math.max(30, node.width() * scaleX),
-                      height: Math.max(30, node.height() * scaleY),
-                    });
-                  }}
-                  onDragEnd={() => {
-                    const node = cropRectRef.current;
-                    setCropArea({
-                      x: node.x(),
-                      y: node.y(),
-                      width: node.width() * node.scaleX(), 
-                      height: node.height() * node.scaleY(),
-                    });
-                  }}
-                />
-                <Transformer
-                  ref={cropTransformerRef}
-                  rotateEnabled={false}
-                  enabledAnchors={[
-                    "top-left",
-                    "top-center",
-                    "top-right",
-                    "middle-left",
-                    "middle-right",
-                    "bottom-left",
-                    "bottom-center",
-                    "bottom-right",
-                  ]}
-                  boundBoxFunc={(oldBox, newBox) => {
-                    if (newBox.width < 30 || newBox.height < 30) {
-                      return oldBox;
-                    }
-
-                    const imageNode = imageNodeRef.current;
-                    if (!imageNode) return newBox; 
-
-                    const imageClientRect = imageNode.getClientRect();
-
-                    let constrainedNewBox = { ...newBox };
-
-                    if (constrainedNewBox.x < imageClientRect.x) {
-                      constrainedNewBox.width -= imageClientRect.x - constrainedNewBox.x;
-                      constrainedNewBox.x = imageClientRect.x;
-                    }
-                    if (constrainedNewBox.y < imageClientRect.y) {
-                      constrainedNewBox.height -= imageClientRect.y - constrainedNewBox.y;
-                      constrainedNewBox.y = imageClientRect.y;
-                    }
-                    if (
-                      constrainedNewBox.x + constrainedNewBox.width >
-                      imageClientRect.x + imageClientRect.width
-                    ) {
-                      constrainedNewBox.width =
-                        imageClientRect.x + imageClientRect.width - constrainedNewBox.x;
-                    }
-                    if (
-                      constrainedNewBox.y + constrainedNewBox.height >
-                      imageClientRect.y + imageClientRect.height
-                    ) {
-                      constrainedNewBox.height =
-                        imageClientRect.y + imageClientRect.height - constrainedNewBox.y;
-                    }
-
-                    constrainedNewBox.width = Math.max(30, constrainedNewBox.width);
-                    constrainedNewBox.height = Math.max(30, constrainedNewBox.height);
-
-                    return constrainedNewBox;
-                  }}
-                />
-              </>
-            )}
+            {highlightImage && <KonvaImage ref={highlightRef} image={highlightImage} opacity={0} />}
           </Layer>
         </Stage>
-      </div>
+      )}
     </div>
   );
 }
