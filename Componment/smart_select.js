@@ -127,34 +127,15 @@ export default function ImageEditor() {
       const a = imageData.data[index + 3];
 
       if (a !== 0) {
-        highlightMatchingPixels(imageObj, { r, g, b });
-        return;
+        console.log("Hovered image index:", i);
+
+        // 👉 Pass image and index
+        highlightMatchingPixels(imageObj, { r, g, b }, i);
+        break; // ✅ Break loop after match
       }
     }
 
     fadeOutHighlight();
-  };
-
-  const fadeInHighlight = () => {
-    if (highlightRef.current) {
-      new Konva.Tween({
-        node: highlightRef.current,
-        duration: 0.1,
-        opacity: 1,
-        easing: Konva.Easings.EaseInOut,
-      }).play();
-    }
-  };
-
-  const fadeOutHighlight = () => {
-    if (highlightRef.current) {
-      new Konva.Tween({
-        node: highlightRef.current,
-        duration: 0.1,
-        opacity: 0,
-        easing: Konva.Easings.EaseInOut,
-      }).play();
-    }
   };
 
   const highlightMatchingPixels = (imageObj, targetRGBA) => {
@@ -198,6 +179,28 @@ export default function ImageEditor() {
       fadeInHighlight();
     };
     img.src = tempCanvas.toDataURL();
+  };
+
+  const fadeInHighlight = () => {
+    if (highlightRef.current) {
+      new Konva.Tween({
+        node: highlightRef.current,
+        duration: 0.4,
+        opacity: 1,
+        easing: Konva.Easings.EaseInOut,
+      }).play();
+    }
+  };
+
+  const fadeOutHighlight = () => {
+    if (highlightRef.current) {
+      new Konva.Tween({
+        node: highlightRef.current,
+        duration: 1,
+        opacity: 0,
+        easing: Konva.Easings.EaseInOut,
+      }).play();
+    }
   };
 
   return (
