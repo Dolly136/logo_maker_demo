@@ -15,8 +15,27 @@ const Sidebar = ({
   addSvg,
   selected,
   addText,
+  updateFontFamily,
+  texts,
 }) => {
-  const [activeTab, setActiveTab] = useState("shapes"); // "shapes" or "icons"
+  const [activeTab, setActiveTab] = useState("shapes");
+  const fontList = [
+    "Roboto",
+    "Monoton",
+    "Lobster",
+    "Pacifico",
+    "Poppins",
+    "Playfair Display",
+    "Open Sans",
+    "Bebas Neue",
+    "Dancing Script",
+    "Oswald",
+  ];
+
+  const loadGoogleFont = async (fontName) => {
+    await document.fonts.load(`16px ${fontName}`);
+    await document.fonts.ready;
+  };
 
   const bgImage = [
     { img: "./01.jpg" },
@@ -121,11 +140,24 @@ const Sidebar = ({
               >
                 Shapes
               </button>
+              <button
+                onClick={() => setActiveTab("texts")}
+                className={`px-4 py-2 rounded ${
+                  activeTab === "texts" ? "bg-blue-600 text-white" : "bg-gray-200"
+                }`}
+              >
+                Add Text
+              </button>
             </div>
 
             <div className="h-[1000px] overflow-y-auto pr-2">
               <div className="grid grid-cols-2 gap-3 mb-6">
-                {(activeTab === "shapes" ? SVG_SHAPE_LIST : SVG_LIST).map(({ id, name, url }) => (
+                {(activeTab === "shapes"
+                  ? SVG_SHAPE_LIST
+                  : activeTab === "icons"
+                  ? SVG_LIST
+                  : []
+                ).map(({ id, name, url }) => (
                   <button
                     key={id}
                     onClick={() => addSvg(url)}
@@ -140,9 +172,77 @@ const Sidebar = ({
                     />
                   </button>
                 ))}
+
+                {activeTab === "texts" && (
+                  <>
+                    <button
+                      onClick={() => addText("Thanks a Bunch", "Monoton")}
+                      className="border rounded bg-blue-600 text-white hover:bg-blue-700 p-2"
+                    >
+                      Monoton
+                    </button>
+                    <button
+                      onClick={() => addText("Hello Stylish", "Lobster")}
+                      className="border rounded bg-green-600 text-white hover:bg-green-700 p-2"
+                    >
+                      Lobster
+                    </button>
+                    <button
+                      onClick={() => addText("Elegant Text", "Pacifico")}
+                      className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2"
+                    >
+                      Pacifico
+                    </button>
+                    <button
+                      onClick={() => addText("Elegant Title", "Playfair Display")}
+                      className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2"
+                    >
+                      Playfair Display
+                    </button>
+                    <button
+                      onClick={() => addText("Simple Body", "Poppins")}
+                      className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2"
+                    >
+                      Poppins
+                    </button>
+                    <button
+                      onClick={() => addText("Plain Text", "Roboto")}
+                      className="border rounded bg-gray text-white hover:bg-gray p-2"
+                    >
+                      Roboto
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await document.fonts.load("16px 'Dancing Script'");
+                        addText("Beautiful!", "Dancing Script,cursive");
+                      }}
+                      className="border px-4 py-2 bg-blue-600 text-white rounded"
+                    >
+                      Add Dancing Script Text
+                    </button>
+                    <button
+                      onClick={() => addText("BIRTHDAY BASH", "Anton")}
+                      className="border rounded bg-pink text-white hover:bg-pink p-2 mb-4 ml-2"
+                    >
+                      Add Bold Title
+                    </button>
+                    <select
+                      disabled={!selected}
+                      onChange={(e) => updateFontFamily(e.target.value)}
+                      className="border px-2 py-1"
+                      value={selected ? texts.find((t) => t.id === selected)?.fontFamily || "" : ""}
+                    >
+                      <option value="">Select Font</option>
+                      {fontList.map((font) => (
+                        <option key={font} value={font}>
+                          {font}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
               </div>
             </div>
-
           </div>
         )}
       </div>

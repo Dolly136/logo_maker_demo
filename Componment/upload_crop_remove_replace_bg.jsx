@@ -696,9 +696,7 @@ export default function ImageEditor() {
             Download Image
           </button>
         </div>
-        <button onClick={addText} className="p-2 m-2 bg-blue-600 text-white rounded">
-          Add Text
-        </button>
+        
         <div
           style={{
             border: "2px solid #ccc",

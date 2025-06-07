@@ -425,17 +425,20 @@ export default function ImageEditor() {
     setColorKeys(nextState.colorKeys);
   }
 
-  const addText = () => {
+  const addText = (value, font) => {
+    console.log(font, 'font');
     const newText = {
       id: Date.now().toString(),
       x: 50,
       y: 50,
-      text: "New Text",
-      fontSize: 24,
-      width: 300,
+      text: value,
+      fontSize: 32,
+      fontFamily: font,
+      fill: "#000000",
+      fontStyle: "normal",
       draggable: true,
     };
-    setTexts([...texts, newText]);
+    setTexts((prev) => [...prev, newText]);
   };
 
   const handleSelect = (id) => {
@@ -444,6 +447,25 @@ export default function ImageEditor() {
       setSelected(id);
     }
   };
+
+    const updateFontFamily = async (fontFamily) => {
+    if (!selected) return;
+    await document.fonts.load(`16px ${fontFamily}`);
+    await document.fonts.ready;
+
+    setTexts((prev) =>
+      prev.map((text) =>
+        text.id === selected ? { ...text, fontFamily } : text
+      )
+    );
+  };
+
+  useEffect(() => {
+    if (selectedId && trRef.current && textRefs.current[selectedId]) {
+      trRef.current.nodes([textRefs.current[selectedId]]);
+      trRef.current.getLayer().batchDraw();
+    }
+  }, [selectedId, texts]);
 
   const handleDblClick = (id) => {
     setIsEditing(true);
@@ -802,6 +824,9 @@ export default function ImageEditor() {
         openColorFilter={openColorFilter}
         applyFilter={applyFilter}
         addSvg={addSvg}
+        addText={addText}
+        updateFontFamily={updateFontFamily}
+        texts={texts}
       />
       <div className="min-h-screen w-full flex flex-col items-center justify-center p-6">
         <Topbar

@@ -21,6 +21,11 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <head>
         <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+        {/* <link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet" /> */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Monoton&family=Roboto&family=Lobster&family=Open+Sans&family=Pacifico&family=Raleway&family=Oswald&family=Playfair+Display&family=Nunito&family=Poppins&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
     </html>
