@@ -14,6 +14,7 @@ export default function ImageEditor() {
   const [showCropRect, setShowCropRect] = useState(false);
 
   const [lastCropData, setLastCropData] = useState(null);
+  const [cropAspectRatio, setCropAspectRatio] = useState(null);
 
   const cropRectRef = useRef();
   const cropTransformerRef = useRef();
@@ -81,6 +82,7 @@ export default function ImageEditor() {
       setLastCropData(null);
       setSelected(false);
       setShowCropRect(false);
+      setCropAspectRatio(null);
     };
 
     return () => {
@@ -260,6 +262,83 @@ export default function ImageEditor() {
     });
   };
 
+  const handleAspectRatioChange = (e) => {
+    const ratioValue = e.target.value;
+    let newAspectRatio = null;
+
+    if (ratioValue !== "none") {
+      const [widthStr, heightStr] = ratioValue.split(":");
+      newAspectRatio = Number(widthStr) / Number(heightStr);
+    }
+    setCropAspectRatio(newAspectRatio);
+    if (imageObj) {
+      let currentImageDisplayWidth = imageProps.width * imageProps.scaleX;
+      let currentImageDisplayHeight = imageProps.height * imageProps.scaleY;
+
+      let newCropWidth = currentImageDisplayWidth;
+      let newCropHeight = currentImageDisplayHeight;
+
+      if (newAspectRatio !== null) {
+        if (currentImageDisplayWidth / currentImageDisplayHeight > newAspectRatio) {
+          newCropHeight = currentImageDisplayHeight;
+          newCropWidth = newCropHeight * newAspectRatio;
+        } else {
+          newCropWidth = currentImageDisplayWidth;
+          newCropHeight = newCropWidth / newAspectRatio;
+        }
+      }
+
+      const imageNode = imageNodeRef.current;
+      let imageClientRect = null;
+      if (imageNode) {
+          imageClientRect = imageNode.getClientRect();
+      }
+
+      let cropX = (stageWidth - newCropWidth) / 2;
+      let cropY = (stageHeight - newCropHeight) / 2;
+
+      if (imageClientRect) {
+        cropX = Math.max(imageClientRect.x, cropX);
+        cropY = Math.max(imageClientRect.y, cropY);
+        
+        if (cropX + newCropWidth > imageClientRect.x + imageClientRect.width) {
+          cropX = imageClientRect.x + imageClientRect.width - newCropWidth;
+        }
+        if (cropY + newCropHeight > imageClientRect.y + imageClientRect.height) {
+          cropY = imageClientRect.y + imageClientRect.height - newCropHeight;
+        }
+
+        if (newCropWidth > imageClientRect.width) {
+          newCropWidth = imageClientRect.width;
+          if (newAspectRatio !== null) {
+            newCropHeight = newCropWidth / newAspectRatio;
+          }
+        }
+        if (newCropHeight > imageClientRect.height) {
+          newCropHeight = imageClientRect.height;
+          if (newAspectRatio !== null) {
+            newCropWidth = newCropHeight * newAspectRatio;
+          }
+        }
+      }
+
+
+      setCropArea({
+        x: cropX,
+        y: cropY,
+        width: newCropWidth,
+        height: newCropHeight,
+      });
+
+      setTimeout(() => {
+        if (cropTransformerRef.current && cropRectRef.current) {
+          cropTransformerRef.current.nodes([cropRectRef.current]);
+          cropTransformerRef.current.getLayer().batchDraw();
+        }
+      }, 0);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-100">
       <input
@@ -338,12 +417,30 @@ export default function ImageEditor() {
           {showCropRect ? "Cancel Crop" : "Crop Image"}
         </button>
         {showCropRect && (
-          <button
-            onClick={handleCrop}
-            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
-          >
-            Apply Crop
-          </button>
+          <>
+            <select
+              onChange={handleAspectRatioChange}
+              className="px-4 py-2 border rounded-lg"
+              value={cropAspectRatio === null ? "none" : `${cropAspectRatio * 16}:16`} 
+            >
+              <option value="none">Free</option>
+              <option value="1:1">1:1 (Square)</option>
+              <option value="9:16">9:16</option>
+              <option value="16:9">16:9</option>
+              <option value="5:4">5:4</option>
+              <option value="4:5">4:5</option>
+              <option value="4:3">4:3</option>
+              <option value="3:4">3:4</option>
+              <option value="3:2">3:2</option>
+              <option value="2:3">2:3</option>
+            </select>
+            <button
+              onClick={handleCrop}
+              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Apply Crop
+            </button>
+          </>
         )}
         <button
           onClick={handleDownload}
@@ -502,6 +599,7 @@ export default function ImageEditor() {
                     "bottom-center",
                     "bottom-right",
                   ]}
+                  keepRatio={cropAspectRatio !== null}
                   boundBoxFunc={(oldBox, newBox) => {
                     if (newBox.width < 30 || newBox.height < 30) {
                       return oldBox;
@@ -513,6 +611,21 @@ export default function ImageEditor() {
                     const imageClientRect = imageNode.getClientRect();
 
                     let constrainedNewBox = { ...newBox };
+
+                    if (cropAspectRatio) {
+                      const ratio = cropAspectRatio;
+                      const width = newBox.width;
+                      const height = newBox.height;
+
+                      const is=newBox.width < oldBox.width?true:false
+
+                      if (is) {
+                        constrainedNewBox.width = height * ratio;
+                      } else {
+                        constrainedNewBox.height = width / ratio;
+                      }
+                      
+                    }
 
                     if (constrainedNewBox.x < imageClientRect.x) {
                       constrainedNewBox.width -= imageClientRect.x - constrainedNewBox.x;

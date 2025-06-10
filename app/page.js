@@ -4,6 +4,7 @@ import ColorPickerListSvg from "@/Componment/ColorPickerListSvg";
 import Sidebar from "@/Componment/Sidebar";
 import Topbar from "@/Componment/Topbar";
 import { filterStyles } from "@/utils/filterStyles";
+import { loadGoogleFont } from "@/utils/loadFont";
 import {
   extractColors,
   fetchSvgText,
@@ -11,6 +12,7 @@ import {
   svgToImage,
 } from "@/utils/servicesFunction";
 import { useEffect, useRef, useState } from "react";
+import { DragDropContext, Draggable, Droppable } from "react-beautiful-dnd";
 import {
   Image as KonvaImage,
   Text as KonvaText,
@@ -44,6 +46,7 @@ export default function ImageEditor() {
   const [openColorFilter, setOpenColorFilter] = useState(false);
   const [bgRemovedBlob, setBgRemovedBlob] = useState(null);
   const [selectedBg, setSelectedBg] = useState(null);
+  const [cropAspectRatio, setCropAspectRatio] = useState(null);
 
   const [imageProps, setImageProps] = useState({
     x: 50,
@@ -73,6 +76,32 @@ export default function ImageEditor() {
   const cropTransformerRef = useRef();
   const transformerRef = useRef();
   const imageNodeRef = useRef();
+  const [layerList, setLayerList] = useState([]);
+  useEffect(() => {
+    const newLayerList = [];
+
+    if (selectedBg) {
+      newLayerList.push({ id: "bg", type: "background", label: "Background" });
+    }
+
+    if (imageObj) {
+      newLayerList.push({ id: "main-image", type: "mainImage", label: "Image" });
+    }
+
+    if (showCropRect) {
+      newLayerList.push({ id: "crop-rect", type: "crop", label: "Crop Area" });
+    }
+
+    texts.forEach((text) => {
+      newLayerList.push({ ...text, id: text.id, type: "text", label: "Text" });
+    });
+
+    images.forEach((img) => {
+      newLayerList.push({ ...img, id: img.id, type: "extraImage", label: "Image" });
+    });
+
+    setLayerList(newLayerList);
+  }, [selectedBg, imageObj, texts, images, showCropRect]);
 
   const togglePicker = (key, type) => {
     setPickerVisibility((prev) => ({
@@ -231,12 +260,11 @@ export default function ImageEditor() {
   }
 
   useEffect(() => {
-    if (!transformerRef.current) return; // <-- add this guard
+    if (!transformerRef.current) return;
 
     if (!selectedId) {
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer().batchDraw();
-      // other state clearing...
       return;
     }
 
@@ -425,38 +453,92 @@ export default function ImageEditor() {
     setColorKeys(nextState.colorKeys);
   }
 
-  const addText = (value, font) => {
-    console.log(font, 'font');
+  const addText = (text, fontFamily) => {
     const newText = {
       id: Date.now().toString(),
       x: 50,
       y: 50,
-      text: value,
+      text,
       fontSize: 32,
-      fontFamily: font,
+      fontFamily,
       fill: "#000000",
-      fontStyle: "normal",
       draggable: true,
+      fontStyle: "normal", // normal, bold, italic, bold italic
+      textDecoration: "", // underline, line-through
+      shadowColor: "",
+      shadowBlur: 0,
+      shadowOffsetX: 0,
+      shadowOffsetY: 0,
+      shadowOpacity: 0,
+      textTransform: "none", // or "uppercase"
     };
     setTexts((prev) => [...prev, newText]);
   };
 
-  const handleSelect = (id) => {
-    console.log(id, "id");
-    if (!isEditing) {
-      setSelected(id);
-    }
+  const updateTextStyle = (key, value) => {
+    setTexts((prev) => prev.map((t) => (t.id === selectedId ? { ...t, [key]: value } : t)));
   };
 
-    const updateFontFamily = async (fontFamily) => {
-    if (!selected) return;
-    await document.fonts.load(`16px ${fontFamily}`);
-    await document.fonts.ready;
+  const toggleTextTransform = () => {
+    const current = texts.find((t) => t.id === selectedId);
+    updateTextStyle("textTransform", current?.textTransform === "uppercase" ? "none" : "uppercase");
+  };
+
+  const toggleBold = () => {
+    const current = texts.find((t) => t.id === selectedId);
+    const isBold = current?.fontStyle.includes("bold");
+    const newStyle = isBold
+      ? current.fontStyle.replace("bold", "").trim()
+      : `${current.fontStyle} bold`.trim();
+    updateTextStyle("fontStyle", newStyle);
+  };
+
+  const toggleItalic = () => {
+    const current = texts.find((t) => t.id === selectedId);
+    const isItalic = current?.fontStyle.includes("italic");
+    const newStyle = isItalic
+      ? current.fontStyle.replace("italic", "").trim()
+      : `${current.fontStyle} italic`.trim();
+    updateTextStyle("fontStyle", newStyle);
+  };
+
+  const toggleUnderline = () => {
+    const current = texts.find((t) => t.id === selectedId);
+    const newStyle = current?.textDecoration === "underline" ? "" : "underline";
+    updateTextStyle("textDecoration", newStyle);
+  };
+
+  const shapeRefs = useRef({});
+
+  const [selectedType, setSelectedType] = useState(null);
+
+  useEffect(() => {
+    const transformer = transformerRef.current;
+    const node = shapeRefs.current[selectedId];
+    if (transformer && node) {
+      transformer.nodes([node]);
+      transformer.getLayer().batchDraw();
+    } else if (transformer) {
+      transformer.nodes([]);
+    }
+  }, [selectedId]);
+
+  const handleSelect = (id, type) => {
+    setSelectedId(id);
+    setSelectedType(type);
+  };
+
+  const updateFontFamily = async (fontFamily) => {
+    if (!selectedId) return;
+
+    await loadGoogleFont(fontFamily);
 
     setTexts((prev) =>
       prev.map((text) =>
-        text.id === selected ? { ...text, fontFamily } : text
-      )
+        text.id === selectedId
+          ? { ...text, fontFamily, _forceRerender: Date.now() } // force KonvaText re-render
+          : text,
+      ),
     );
   };
 
@@ -468,10 +550,42 @@ export default function ImageEditor() {
   }, [selectedId, texts]);
 
   const handleDblClick = (id) => {
-    setIsEditing(true);
+    const textNode = shapeRefs.current[id];
+    const stage = stageRef.current;
+
+    if (!textNode || !stage) return;
+
+    const textPosition = textNode.getAbsolutePosition();
+    const stageBox = stage.container().getBoundingClientRect();
+
+    const areaPosition = {
+      x: stageBox.left + textPosition.x,
+      y: stageBox.top + textPosition.y,
+    };
+
+    setTextAreaStyle({
+      position: "absolute",
+      top: `${areaPosition.y}px`,
+      left: `${areaPosition.x}px`,
+      fontSize: `${textNode.fontSize()}px`,
+      fontFamily: textNode.fontFamily(),
+      color: textNode.fill(),
+      background: "white",
+      border: "1px solid #ccc",
+      padding: "4px",
+      resize: "none",
+      lineHeight: textNode.lineHeight(),
+      transformOrigin: "top left",
+      textAlign: textNode.align(),
+      transform: `rotate(${textNode.rotation()}deg)`,
+      whiteSpace: "pre",
+      overflow: "hidden",
+      zIndex: 1000,
+    });
+
+    setValue(textNode.text());
     setEditingTextId(id);
-    const currentText = texts.find((t) => t.id === id);
-    setValue(currentText.text);
+    setIsEditing(true);
   };
 
   const handleBlur = () => {
@@ -480,10 +594,15 @@ export default function ImageEditor() {
     setEditingTextId(null);
   };
 
-  const handleDragEnd = (id, pos) => {
-    setTexts((prev) => prev.map((t) => (t.id === id ? { ...t, ...pos } : t)));
+  const handleDragEnd = (type, id, pos) => {
+    if (type === "image") {
+      setImages((prev) =>
+        prev.map((img) => (img.id === id ? { ...img, x: pos.x, y: pos.y } : img)),
+      );
+    } else if (type === "text") {
+      setTexts((prev) => prev.map((txt) => (txt.id === id ? { ...txt, x: pos.x, y: pos.y } : txt)));
+    }
   };
-
   const applyFilter = (filterKey) => {
     const imageNode = imageNodeRef.current;
     const filter = filterStyles[filterKey];
@@ -516,8 +635,8 @@ export default function ImageEditor() {
   };
 
   const handleCrop = () => {
-    const imageNode = imageNodeRef.current;
-    const cropNode = cropRectRef.current;
+    const imageNode = shapeRefs.current["main-image"];
+    const cropNode = shapeRefs.current["crop-rect"];
     if (!imageNode || !cropNode || !originalImageObj) return;
 
     const imagePropsBeforeCrop = {
@@ -537,7 +656,10 @@ export default function ImageEditor() {
 
     const absTransform = imageNode.getAbsoluteTransform().copy().invert();
     const topLeft = absTransform.point({ x: cropX, y: cropY });
-    const bottomRight = absTransform.point({ x: cropX + cropWidth, y: cropY + cropHeight });
+    const bottomRight = absTransform.point({
+      x: cropX + cropWidth,
+      y: cropY + cropHeight,
+    });
 
     const srcX = Math.max(0, topLeft.x);
     const srcY = Math.max(0, topLeft.y);
@@ -567,7 +689,7 @@ export default function ImageEditor() {
       });
 
       setShowCropRect(false);
-      setSelected(false);
+      setSelectedId(null);
 
       setLastCropData({
         cropRect: {
@@ -579,6 +701,82 @@ export default function ImageEditor() {
         imagePropsAtCrop: imagePropsBeforeCrop,
       });
     };
+  };
+
+  const handleAspectRatioChange = (value) => {
+    let newAspectRatio = null;
+
+    if (value === "original" && imageProps?.width && imageProps?.height) {
+      newAspectRatio = imageProps.width / imageProps.height;
+    } else if (value !== "none") {
+      const [widthStr, heightStr] = value.split(":");
+      newAspectRatio = Number(widthStr) / Number(heightStr);
+    }
+
+    setCropAspectRatio(newAspectRatio);
+
+    if (!imageObj) return;
+
+    let currentImageDisplayWidth = imageProps.width * imageProps.scaleX;
+    let currentImageDisplayHeight = imageProps.height * imageProps.scaleY;
+
+    let newCropWidth = currentImageDisplayWidth;
+    let newCropHeight = currentImageDisplayHeight;
+
+    if (newAspectRatio !== null) {
+      if (currentImageDisplayWidth / currentImageDisplayHeight > newAspectRatio) {
+        newCropHeight = currentImageDisplayHeight;
+        newCropWidth = newCropHeight * newAspectRatio;
+      } else {
+        newCropWidth = currentImageDisplayWidth;
+        newCropHeight = newCropWidth / newAspectRatio;
+      }
+    }
+
+    const imageNode = imageNodeRef.current;
+    let imageClientRect = imageNode ? imageNode.getClientRect() : null;
+
+    let cropX = (stageWidth - newCropWidth) / 2;
+    let cropY = (stageHeight - newCropHeight) / 2;
+
+    if (imageClientRect) {
+      cropX = Math.max(imageClientRect.x, cropX);
+      cropY = Math.max(imageClientRect.y, cropY);
+
+      if (cropX + newCropWidth > imageClientRect.x + imageClientRect.width) {
+        cropX = imageClientRect.x + imageClientRect.width - newCropWidth;
+      }
+      if (cropY + newCropHeight > imageClientRect.y + imageClientRect.height) {
+        cropY = imageClientRect.y + imageClientRect.height - newCropHeight;
+      }
+
+      if (newCropWidth > imageClientRect.width) {
+        newCropWidth = imageClientRect.width;
+        if (newAspectRatio !== null) {
+          newCropHeight = newCropWidth / newAspectRatio;
+        }
+      }
+      if (newCropHeight > imageClientRect.height) {
+        newCropHeight = imageClientRect.height;
+        if (newAspectRatio !== null) {
+          newCropWidth = newCropHeight * newAspectRatio;
+        }
+      }
+    }
+
+    setCropArea({
+      x: cropX,
+      y: cropY,
+      width: newCropWidth,
+      height: newCropHeight,
+    });
+
+    setTimeout(() => {
+      if (cropTransformerRef.current && cropRectRef.current) {
+        cropTransformerRef.current.nodes([cropRectRef.current]);
+        cropTransformerRef.current.getLayer().batchDraw();
+      }
+    }, 0);
   };
 
   const handleDownload = () => {
@@ -624,6 +822,7 @@ export default function ImageEditor() {
   const handleOpenColorFilter = (value) => {
     setOpenColorFilter(value);
     setReplaceBgOpen(false);
+    setShowCropRect(false);
   };
 
   const removeBackground = async () => {
@@ -811,6 +1010,23 @@ export default function ImageEditor() {
     }
   };
 
+  const onDragEnd = (result) => {
+    if (!result.destination) return;
+
+    const reordered = Array.from(layerList);
+    const [moved] = reordered.splice(result.source.index, 1);
+    reordered.splice(result.destination.index, 0, moved);
+    setLayerList(reordered);
+
+    setTimeout(() => {
+      reordered.forEach((item) => {
+        const node = shapeRefs.current[item.id];
+        if (node) node.moveToTop();
+      });
+      stageRef.current?.batchDraw();
+    }, 0);
+  };
+
   return (
     <div className="flex w-full bg-gray-100">
       <Sidebar
@@ -827,6 +1043,23 @@ export default function ImageEditor() {
         addText={addText}
         updateFontFamily={updateFontFamily}
         texts={texts}
+        showCropRect={showCropRect}
+        cropAspectRatio={cropAspectRatio}
+        handleAspectRatioChange={handleAspectRatioChange}
+        setSelected={setSelected}
+        setOpenColorFilter={setOpenColorFilter}
+        originalImageObj={originalImageObj}
+        setCropArea={setCropArea}
+        setImageProps={setImageProps}
+        setImageObj={setImageObj}
+        setShowCropRect={setShowCropRect}
+        handleCrop={handleCrop}
+        selectedId={selectedId}
+        updateTextStyle={updateTextStyle}
+        toggleBold={toggleBold}
+        toggleItalic={toggleItalic}
+        toggleUnderline={toggleUnderline}
+        toggleTextTransform={toggleTextTransform}
       />
       <div className="min-h-screen w-full flex flex-col items-center justify-center p-6">
         <Topbar
@@ -840,7 +1073,6 @@ export default function ImageEditor() {
           setCropArea={setCropArea}
           setSelected={setSelected}
           showCropRect={showCropRect}
-          handleCrop={handleCrop}
           removeBackground={removeBackground}
           imageFile={imageFile}
           replaceBgPopUpOpen={replaceBgPopUpOpen}
@@ -848,11 +1080,37 @@ export default function ImageEditor() {
           handleOpenColorFilter={handleOpenColorFilter}
           imageObj={imageObj}
           handleDownload={handleDownload}
-          addText={addText}
           stageHeight={stageHeight}
           stageWidth={stageWidth}
+          handleAspectRatioChange={handleAspectRatioChange}
+          cropAspectRatio={cropAspectRatio}
+          setOpenColorFilter={setOpenColorFilter}
         />
 
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Droppable droppableId="layer-list">
+            {(provided) => (
+              <div ref={provided.innerRef} {...provided.droppableProps}>
+                {layerList.map((item, index) => (
+                  <Draggable key={item.id} draggableId={item.id} index={index}>
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        className="p-2 mb-2 bg-gray-100 rounded shadow cursor-pointer"
+                        onClick={() => handleSelect(item.id, item.type)}
+                      >
+                        {item.label}
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
         <div
           style={{
             border: "2px solid #ccc",
@@ -871,7 +1129,7 @@ export default function ImageEditor() {
             ref={stageRef}
           >
             <Layer>
-              {selectedBg && imageObj && (
+              {selectedBg && (
                 <KonvaImage
                   image={selectedBg}
                   x={imageProps.x}
@@ -885,241 +1143,124 @@ export default function ImageEditor() {
                 />
               )}
 
-              {/* Main editable image */}
               {imageObj && (
-                <>
-                  <KonvaImage
-                    image={imageObj}
-                    x={imageProps.x}
-                    y={imageProps.y}
-                    scaleX={imageProps.scaleX}
-                    scaleY={imageProps.scaleY}
-                    rotation={imageProps.rotation}
-                    width={imageProps.width}
-                    height={imageProps.height}
-                    draggable={!showCropRect}
-                    onClick={() => !showCropRect && setSelected(true)}
-                    ref={imageNodeRef}
-                    onTransformEnd={() => {
-                      const node = imageNodeRef.current;
-                      setImageProps({
-                        x: node.x(),
-                        y: node.y(),
-                        width: node.width(),
-                        height: node.height(),
-                        scaleX: node.scaleX(),
-                        scaleY: node.scaleY(),
-                        rotation: node.rotation(),
-                      });
-                    }}
-                    onDragEnd={() => {
-                      const node = imageNodeRef.current;
-                      setImageProps((prevProps) => ({
-                        ...prevProps,
-                        x: node.x(),
-                        y: node.y(),
-                      }));
-                    }}
-                  />
-                  {selected && !showCropRect && (
-                    <Transformer
-                      ref={transformerRef}
-                      rotateEnabled={true}
-                      enabledAnchors={[
-                        "top-left",
-                        "top-center",
-                        "top-right",
-                        "middle-left",
-                        "middle-right",
-                        "bottom-left",
-                        "bottom-center",
-                        "bottom-right",
-                      ]}
-                      boundBoxFunc={(oldBox, newBox) => {
-                        if (
-                          newBox.width * newBox.scaleX < 30 ||
-                          newBox.height * newBox.scaleY < 30
-                        ) {
-                          return oldBox;
-                        }
-                        return newBox;
-                      }}
-                    />
-                  )}
-                </>
+                <KonvaImage
+                  image={imageObj}
+                  ref={(node) => (shapeRefs.current["main-image"] = node)}
+                  {...imageProps}
+                  x={imageProps.x}
+                  y={imageProps.y}
+                  scaleX={imageProps.scaleX}
+                  scaleY={imageProps.scaleY}
+                  rotation={imageProps.rotation}
+                  width={imageProps.width}
+                  height={imageProps.height}
+                  draggable={!showCropRect}
+                  onClick={() => !showCropRect && handleSelect("main-image", "image")}
+                  onTransformEnd={(e) => {
+                    const node = shapeRefs.current["main-image"];
+                    setImageProps({
+                      x: node.x(),
+                      y: node.y(),
+                      width: node.width(),
+                      height: node.height(),
+                      scaleX: node.scaleX(),
+                      scaleY: node.scaleY(),
+                      rotation: node.rotation(),
+                    });
+                  }}
+                  onDragEnd={(e) => {
+                    const node = shapeRefs.current["main-image"];
+                    setImageProps((prev) => ({
+                      ...prev,
+                      x: node.x(),
+                      y: node.y(),
+                    }));
+                  }}
+                />
               )}
 
-              {/* Crop Rectangle */}
               {showCropRect && (
-                <>
-                  <Rect
-                    ref={cropRectRef}
-                    x={cropArea.x}
-                    y={cropArea.y}
-                    width={cropArea.width}
-                    height={cropArea.height}
-                    fill="rgba(0,0,0,0.5)"
-                    stroke="yellow"
-                    strokeWidth={2}
-                    draggable
-                    dragBoundFunc={(pos) => {
-                      const imageNode = imageNodeRef.current;
-                      if (!imageNode) return pos;
-
-                      const imageClientRect = imageNode.getClientRect();
-                      let newX = pos.x;
-                      let newY = pos.y;
-                      const cropWidth = cropRectRef.current.width() * cropRectRef.current.scaleX();
-                      const cropHeight =
-                        cropRectRef.current.height() * cropRectRef.current.scaleY();
-
-                      if (newX < imageClientRect.x) newX = imageClientRect.x;
-                      if (newY < imageClientRect.y) newY = imageClientRect.y;
-                      if (newX + cropWidth > imageClientRect.x + imageClientRect.width) {
-                        newX = imageClientRect.x + imageClientRect.width - cropWidth;
-                      }
-                      if (newY + cropHeight > imageClientRect.y + imageClientRect.height) {
-                        newY = imageClientRect.y + imageClientRect.height - cropHeight;
-                      }
-
-                      return { x: newX, y: newY };
-                    }}
-                    onTransformEnd={() => {
-                      const node = cropRectRef.current;
-                      const scaleX = node.scaleX();
-                      const scaleY = node.scaleY();
-                      node.scaleX(1);
-                      node.scaleY(1);
-
-                      setCropArea({
-                        x: node.x(),
-                        y: node.y(),
-                        width: Math.max(30, node.width() * scaleX),
-                        height: Math.max(30, node.height() * scaleY),
-                      });
-                    }}
-                    onDragEnd={() => {
-                      const node = cropRectRef.current;
-                      setCropArea({
-                        x: node.x(),
-                        y: node.y(),
-                        width: node.width() * node.scaleX(),
-                        height: node.height() * node.scaleY(),
-                      });
-                    }}
-                  />
-                  <Transformer
-                    ref={cropTransformerRef}
-                    rotateEnabled={false}
-                    enabledAnchors={[
-                      "top-left",
-                      "top-center",
-                      "top-right",
-                      "middle-left",
-                      "middle-right",
-                      "bottom-left",
-                      "bottom-center",
-                      "bottom-right",
-                    ]}
-                    boundBoxFunc={(oldBox, newBox) => {
-                      if (newBox.width < 30 || newBox.height < 30) {
-                        return oldBox;
-                      }
-
-                      const imageNode = imageNodeRef.current;
-                      if (!imageNode) return newBox;
-
-                      const imageClientRect = imageNode.getClientRect();
-                      let constrainedNewBox = { ...newBox };
-
-                      if (constrainedNewBox.x < imageClientRect.x) {
-                        constrainedNewBox.width -= imageClientRect.x - constrainedNewBox.x;
-                        constrainedNewBox.x = imageClientRect.x;
-                      }
-                      if (constrainedNewBox.y < imageClientRect.y) {
-                        constrainedNewBox.height -= imageClientRect.y - constrainedNewBox.y;
-                        constrainedNewBox.y = imageClientRect.y;
-                      }
-                      if (
-                        constrainedNewBox.x + constrainedNewBox.width >
-                        imageClientRect.x + imageClientRect.width
-                      ) {
-                        constrainedNewBox.width =
-                          imageClientRect.x + imageClientRect.width - constrainedNewBox.x;
-                      }
-                      if (
-                        constrainedNewBox.y + constrainedNewBox.height >
-                        imageClientRect.y + imageClientRect.height
-                      ) {
-                        constrainedNewBox.height =
-                          imageClientRect.y + imageClientRect.height - constrainedNewBox.y;
-                      }
-
-                      constrainedNewBox.width = Math.max(30, constrainedNewBox.width);
-                      constrainedNewBox.height = Math.max(30, constrainedNewBox.height);
-
-                      return constrainedNewBox;
-                    }}
-                  />
-                </>
+                <Rect
+                  ref={(node) => (shapeRefs.current["crop-rect"] = node)}
+                  {...cropArea}
+                  fill="rgba(0,0,0,0.4)"
+                  stroke="yellow"
+                  strokeWidth={2}
+                  draggable
+                  onClick={() => handleSelect("crop-rect", "crop")}
+                  onTransformEnd={(e) => {
+                    const node = shapeRefs.current["crop-rect"];
+                    const scaleX = node.scaleX();
+                    const scaleY = node.scaleY();
+                    node.scaleX(1);
+                    node.scaleY(1);
+                    setCropArea({
+                      x: node.x(),
+                      y: node.y(),
+                      width: Math.max(30, node.width() * scaleX),
+                      height: Math.max(30, node.height() * scaleY),
+                    });
+                  }}
+                  onDragEnd={(e) => {
+                    const node = shapeRefs.current["crop-rect"];
+                    setCropArea({
+                      x: node.x(),
+                      y: node.y(),
+                      width: node.width() * node.scaleX(),
+                      height: node.height() * node.scaleY(),
+                    });
+                  }}
+                />
               )}
-            </Layer>
-            <Layer>
-              {texts?.map((text) => (
+
+              {texts.map((text) => (
                 <KonvaText
                   key={text.id}
-                  ref={(node) => (textRefs.current[text.id] = node)}
+                  ref={(node) => (shapeRefs.current[text.id] = node)}
                   {...text}
-                  draggable
-                  onClick={() => handleSelect(text.id)}
+                  text={text.textTransform === "uppercase" ? text.text.toUpperCase() : text.text}
+                  onClick={() => handleSelect(text.id, "text")}
                   onTap={() => handleSelect(text.id)}
                   onDblClick={() => handleDblClick(text.id)}
                   onDblTap={() => handleDblClick(text.id)}
-                  onDragEnd={(e) =>
-                    handleDragEnd(text.id, {
-                      x: e.target.x(),
-                      y: e.target.y(),
-                    })
-                  }
-                />
-              ))}
-              {selected && !isEditing && <Transformer ref={trRef} />}
-            </Layer>
-            <Layer>
-              {images.map(({ id, image, x, y }) => (
-                <KonvaImage
-                  key={id}
-                  id={`img-${id}`}
-                  image={image}
-                  x={x}
-                  y={y}
-                  draggable
-                  onClick={(e) => {
-                    e.cancelBubble = true;
-                    onSelectImage(id);
-                  }}
                   onDragEnd={(e) => {
-                    const posX = e.target.x();
-                    const posY = e.target.y();
-                    setImages((prev) =>
-                      prev.map((img) => (img.id === id ? { ...img, x: posX, y: posY } : img)),
+                    setTexts((prev) =>
+                      prev.map((t) =>
+                        t.id === text.id ? { ...t, x: e.target.x(), y: e.target.y() } : t,
+                      ),
                     );
                   }}
                 />
               ))}
+
+              {images.map(({ id, image, x, y }) => (
+                <KonvaImage
+                  key={id}
+                  ref={(node) => (shapeRefs.current[id] = node)}
+                  image={image}
+                  x={x}
+                  y={y}
+                  draggable
+                  onClick={() => handleSelect(id, "extra-image")}
+                  onDragEnd={(e) => {
+                    setImages((prev) =>
+                      prev.map((img) =>
+                        img.id === id ? { ...img, x: e.target.x(), y: e.target.y() } : img,
+                      ),
+                    );
+                  }}
+                />
+              ))}
+
               <Transformer
                 ref={transformerRef}
-                rotateEnabled
-                enabledAnchors={[
-                  "top-left",
-                  "top-center",
-                  "top-right",
-                  "middle-left",
-                  "middle-right",
-                  "bottom-left",
-                  "bottom-center",
-                  "bottom-right",
-                ]}
+                rotateEnabled={selectedType !== "crop"}
+                enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]}
+                boundBoxFunc={(oldBox, newBox) => {
+                  if (newBox.width < 30 || newBox.height < 30) return oldBox;
+                  return newBox;
+                }}
               />
             </Layer>
           </Stage>

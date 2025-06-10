@@ -1,6 +1,15 @@
 "use client";
 
+import ColorPickerListSvg from "@/Componment/ColorPickerListSvg";
+import Sidebar from "@/Componment/Sidebar";
+import Topbar from "@/Componment/Topbar";
 import { filterStyles } from "@/utils/filterStyles";
+import {
+  extractColors,
+  fetchSvgText,
+  replaceColorsWithGradients,
+  svgToImage,
+} from "@/utils/servicesFunction";
 import { useEffect, useRef, useState } from "react";
 import {
   Image as KonvaImage,
@@ -34,6 +43,9 @@ export default function ImageEditor() {
   const [replaceBgOpen, setReplaceBgOpen] = useState(false);
   const [openColorFilter, setOpenColorFilter] = useState(false);
   const [bgRemovedBlob, setBgRemovedBlob] = useState(null);
+  const [selectedBg, setSelectedBg] = useState(null);
+  const [cropAspectRatio, setCropAspectRatio] = useState(null);
+
   const [imageProps, setImageProps] = useState({
     x: 50,
     y: 50,
@@ -49,23 +61,219 @@ export default function ImageEditor() {
     width: 0,
     height: 0,
   });
+  const [images, setImages] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [colorMap, setColorMap] = useState({});
+  const [fillTypeMap, setFillTypeMap] = useState({});
+  const [gradientMap, setGradientMap] = useState({});
+  const [colorKeys, setColorKeys] = useState([]);
+  const [undoStack, setUndoStack] = useState([]);
+  const [redoStack, setRedoStack] = useState([]);
+  const [pickerVisibility, setPickerVisibility] = useState({});
   const cropRectRef = useRef();
   const cropTransformerRef = useRef();
   const transformerRef = useRef();
   const imageNodeRef = useRef();
 
-  const addText = () => {
-    const newText = {
-      id: Date.now().toString(),
-      x: 50,
-      y: 50,
-      text: "New Text",
-      fontSize: 24,
-      width: 300,
-      draggable: true,
-    };
-    setTexts([...texts, newText]);
+  const togglePicker = (key, type) => {
+    setPickerVisibility((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        [type]: !prev[key]?.[type],
+      },
+    }));
   };
+
+  async function addSvg(url) {
+    console.log(url, "url");
+    try {
+      const svgText = await fetchSvgText(url);
+      const colors = extractColors(svgText);
+      const initialMap = {};
+      const typeMap = {};
+      colors.forEach((c) => {
+        initialMap[c] = c;
+        typeMap[c] = "color";
+      });
+
+      svgToImage(svgText, (img) => {
+        const id = Date.now().toString();
+
+        pushUndoState({
+          images,
+          selectedId,
+          colorMap,
+          fillTypeMap,
+          gradientMap,
+          colorKeys,
+        });
+
+        setImages((prev) => [
+          ...prev,
+          {
+            id,
+            x: 50 + prev.length * 30,
+            y: 50 + prev.length * 30,
+            svgText,
+            originalColors: colors,
+            image: img,
+            url,
+          },
+        ]);
+        setSelectedId(id);
+        setColorKeys(colors);
+        setColorMap(initialMap);
+        setFillTypeMap(typeMap);
+        setRedoStack([]);
+      });
+    } catch (error) {
+      alert("Failed to load SVG: " + error.message);
+    }
+  }
+
+  function pushUndoState(state) {
+    setUndoStack((prev) => [...prev, state]);
+  }
+
+  function updateImageColors(
+    imgObj,
+    newColorMap,
+    newFillTypeMap = fillTypeMap,
+    newGradientMap = gradientMap,
+  ) {
+    const newSvg = replaceColorsWithGradients(
+      imgObj.svgText,
+      newColorMap,
+      newFillTypeMap,
+      newGradientMap,
+    );
+    svgToImage(newSvg, (img) => {
+      setImages((prev) => prev.map((i) => (i.id === imgObj.id ? { ...i, image: img } : i)));
+    });
+  }
+
+  function onColorChange(origColor, newColor, isGradient = false) {
+    if (!selectedId) return;
+
+    pushUndoState({
+      images,
+      selectedId,
+      colorMap,
+      fillTypeMap,
+      gradientMap,
+      colorKeys,
+    });
+
+    setRedoStack([]);
+
+    const newFillTypes = { ...fillTypeMap, [origColor]: isGradient ? "gradient" : "color" };
+    setFillTypeMap(newFillTypes);
+
+    const updatedMap = {
+      ...colorMap,
+      [origColor]: isGradient ? origColor : newColor.hex,
+    };
+    setColorMap(updatedMap);
+
+    if (isGradient) {
+      setGradientMap((prev) => ({
+        ...prev,
+        [origColor]: { start: newColor.start, end: newColor.end },
+      }));
+    }
+
+    const currentImg = images.find((i) => i.id === selectedId);
+    if (currentImg)
+      updateImageColors(currentImg, updatedMap, newFillTypes, {
+        ...gradientMap,
+        ...(isGradient && {
+          [origColor]: {
+            start: newColor.start,
+            end: newColor.end,
+          },
+        }),
+      });
+  }
+
+  function onSelectImage(id) {
+    setSelectedId(id);
+    const img = images.find((i) => i.id === id);
+    if (!img) return;
+    const newMap = {};
+    const newFillTypes = {};
+    img.originalColors.forEach((c) => {
+      newMap[c] = colorMap[c] || c;
+      newFillTypes[c] = fillTypeMap[c] || "color";
+    });
+    setColorKeys(img.originalColors);
+    setColorMap(newMap);
+    setFillTypeMap(newFillTypes);
+  }
+
+  function deleteSelectedImage() {
+    if (!selectedId) return;
+    pushUndoState({
+      images,
+      selectedId,
+      colorMap,
+      fillTypeMap,
+      gradientMap,
+      colorKeys,
+    });
+    setRedoStack([]);
+
+    setImages((prev) => prev.filter((img) => img.id !== selectedId));
+    setSelectedId(null);
+    setColorKeys([]);
+    setColorMap({});
+    setFillTypeMap({});
+    setGradientMap({});
+  }
+
+  useEffect(() => {
+    if (!transformerRef.current) return;
+
+    if (!selectedId) {
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer().batchDraw();
+      return;
+    }
+
+    const node = stageRef.current.findOne(`#img-${selectedId}`);
+    if (node) {
+      transformerRef.current.nodes([node]);
+      transformerRef.current.getLayer().batchDraw();
+    }
+  }, [selectedId, images]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Delete") {
+        deleteSelectedImage();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedId, images, colorMap, fillTypeMap, gradientMap]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        handleUndo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undoStack, redoStack, images, selectedId, colorMap, fillTypeMap, gradientMap]);
 
   useEffect(() => {
     if (selected && trRef.current && textRefs.current[selected] && !isEditing) {
@@ -106,48 +314,6 @@ export default function ImageEditor() {
       zIndex: 1000,
     });
   }, [isEditing, editingTextId]);
-
-  const handleSelect = (id) => {
-    console.log(id, "id");
-    if (!isEditing) {
-      setSelected(id);
-    }
-  };
-
-  const handleDblClick = (id) => {
-    setIsEditing(true);
-    setEditingTextId(id);
-    const currentText = texts.find((t) => t.id === id);
-    setValue(currentText.text);
-  };
-
-  const handleBlur = () => {
-    setIsEditing(false);
-    setTexts((prev) => prev.map((t) => (t.id === editingTextId ? { ...t, text: value } : t)));
-    setEditingTextId(null);
-  };
-
-  const handleDragEnd = (id, pos) => {
-    setTexts((prev) => prev.map((t) => (t.id === id ? { ...t, ...pos } : t)));
-  };
-
-  const applyFilter = (filterKey) => {
-    const imageNode = imageNodeRef.current;
-    const filter = filterStyles[filterKey];
-
-    if (imageNode && imageObj) {
-      imageNode.filters(filter.filters || []);
-
-      // Apply all filter settings dynamically
-      const adjustableProps = ["brightness", "contrast", "hue", "saturation", "value"];
-      adjustableProps.forEach((prop) => {
-        imageNode[prop](filter[prop] !== undefined ? filter[prop] : 0);
-      });
-
-      imageNode.cache();
-      imageNode.getLayer().batchDraw();
-    }
-  };
 
   useEffect(() => {
     if (!imageFile) return;
@@ -209,6 +375,128 @@ export default function ImageEditor() {
     }
   }, [showCropRect]);
 
+  function handleUndo() {
+    if (undoStack.length === 0) return;
+    const lastState = undoStack[undoStack.length - 1];
+
+    setUndoStack((prev) => prev.slice(0, -1));
+    setRedoStack((prev) => [
+      ...prev,
+      {
+        images,
+        selectedId,
+        colorMap,
+        fillTypeMap,
+        gradientMap,
+        colorKeys,
+      },
+    ]);
+
+    setImages(lastState.images);
+    setSelectedId(lastState.selectedId);
+    setColorMap(lastState.colorMap);
+    setFillTypeMap(lastState.fillTypeMap);
+    setGradientMap(lastState.gradientMap);
+    setColorKeys(lastState.colorKeys);
+  }
+
+  function handleRedo() {
+    if (redoStack.length === 0) return;
+    const nextState = redoStack[redoStack.length - 1];
+
+    setRedoStack((prev) => prev.slice(0, -1));
+    setUndoStack((prev) => [
+      ...prev,
+      {
+        images,
+        selectedId,
+        colorMap,
+        fillTypeMap,
+        gradientMap,
+        colorKeys,
+      },
+    ]);
+
+    setImages(nextState.images);
+    setSelectedId(nextState.selectedId);
+    setColorMap(nextState.colorMap);
+    setFillTypeMap(nextState.fillTypeMap);
+    setGradientMap(nextState.gradientMap);
+    setColorKeys(nextState.colorKeys);
+  }
+
+  const addText = (value, font) => {
+    console.log(font, "font");
+    const newText = {
+      id: Date.now().toString(),
+      x: 50,
+      y: 50,
+      text: value,
+      fontSize: 32,
+      fontFamily: font,
+      fill: "#000000",
+      fontStyle: "normal",
+      draggable: true,
+    };
+    setTexts((prev) => [...prev, newText]);
+  };
+
+  const handleSelect = (id) => {
+    console.log(id, "id");
+    if (!isEditing) {
+      setSelected(id);
+    }
+  };
+
+  const updateFontFamily = async (fontFamily) => {
+    if (!selected) return;
+    await document.fonts.load(`16px ${fontFamily}`);
+    await document.fonts.ready;
+
+    setTexts((prev) => prev.map((text) => (text.id === selected ? { ...text, fontFamily } : text)));
+  };
+
+  useEffect(() => {
+    if (selectedId && trRef.current && textRefs.current[selectedId]) {
+      trRef.current.nodes([textRefs.current[selectedId]]);
+      trRef.current.getLayer().batchDraw();
+    }
+  }, [selectedId, texts]);
+
+  const handleDblClick = (id) => {
+    setIsEditing(true);
+    setEditingTextId(id);
+    const currentText = texts.find((t) => t.id === id);
+    setValue(currentText.text);
+  };
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    setTexts((prev) => prev.map((t) => (t.id === editingTextId ? { ...t, text: value } : t)));
+    setEditingTextId(null);
+  };
+
+  const handleDragEnd = (id, pos) => {
+    setTexts((prev) => prev.map((t) => (t.id === id ? { ...t, ...pos } : t)));
+  };
+
+  const applyFilter = (filterKey) => {
+    const imageNode = imageNodeRef.current;
+    const filter = filterStyles[filterKey];
+
+    if (imageNode && imageObj) {
+      imageNode.filters(filter.filters || []);
+
+      const adjustableProps = ["brightness", "contrast", "hue", "saturation", "value"];
+      adjustableProps.forEach((prop) => {
+        imageNode[prop](filter[prop] !== undefined ? filter[prop] : 0);
+      });
+
+      imageNode.cache();
+      imageNode.getLayer().batchDraw();
+    }
+  };
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file && file.type.startsWith("image/")) {
@@ -220,6 +508,7 @@ export default function ImageEditor() {
     if (e.target === e.target.getStage() || e.target.getParent() === e.target.getStage()) {
       setSelected(false);
     }
+    if (e.target === e.target.getStage()) setSelectedId(null);
   };
 
   const handleCrop = () => {
@@ -288,6 +577,82 @@ export default function ImageEditor() {
     };
   };
 
+  const handleAspectRatioChange = (value) => {
+    let newAspectRatio = null;
+
+    if (value === "original" && imageProps?.width && imageProps?.height) {
+      newAspectRatio = imageProps.width / imageProps.height;
+    } else if (value !== "none") {
+      const [widthStr, heightStr] = value.split(":");
+      newAspectRatio = Number(widthStr) / Number(heightStr);
+    }
+
+    setCropAspectRatio(newAspectRatio);
+
+    if (!imageObj) return;
+
+    let currentImageDisplayWidth = imageProps.width * imageProps.scaleX;
+    let currentImageDisplayHeight = imageProps.height * imageProps.scaleY;
+
+    let newCropWidth = currentImageDisplayWidth;
+    let newCropHeight = currentImageDisplayHeight;
+
+    if (newAspectRatio !== null) {
+      if (currentImageDisplayWidth / currentImageDisplayHeight > newAspectRatio) {
+        newCropHeight = currentImageDisplayHeight;
+        newCropWidth = newCropHeight * newAspectRatio;
+      } else {
+        newCropWidth = currentImageDisplayWidth;
+        newCropHeight = newCropWidth / newAspectRatio;
+      }
+    }
+
+    const imageNode = imageNodeRef.current;
+    let imageClientRect = imageNode ? imageNode.getClientRect() : null;
+
+    let cropX = (stageWidth - newCropWidth) / 2;
+    let cropY = (stageHeight - newCropHeight) / 2;
+
+    if (imageClientRect) {
+      cropX = Math.max(imageClientRect.x, cropX);
+      cropY = Math.max(imageClientRect.y, cropY);
+
+      if (cropX + newCropWidth > imageClientRect.x + imageClientRect.width) {
+        cropX = imageClientRect.x + imageClientRect.width - newCropWidth;
+      }
+      if (cropY + newCropHeight > imageClientRect.y + imageClientRect.height) {
+        cropY = imageClientRect.y + imageClientRect.height - newCropHeight;
+      }
+
+      if (newCropWidth > imageClientRect.width) {
+        newCropWidth = imageClientRect.width;
+        if (newAspectRatio !== null) {
+          newCropHeight = newCropWidth / newAspectRatio;
+        }
+      }
+      if (newCropHeight > imageClientRect.height) {
+        newCropHeight = imageClientRect.height;
+        if (newAspectRatio !== null) {
+          newCropWidth = newCropHeight * newAspectRatio;
+        }
+      }
+    }
+
+    setCropArea({
+      x: cropX,
+      y: cropY,
+      width: newCropWidth,
+      height: newCropHeight,
+    });
+
+    setTimeout(() => {
+      if (cropTransformerRef.current && cropRectRef.current) {
+        cropTransformerRef.current.nodes([cropRectRef.current]);
+        cropTransformerRef.current.getLayer().batchDraw();
+      }
+    }, 0);
+  };
+
   const handleDownload = () => {
     if (!stageRef.current || !imageObj) return;
 
@@ -328,9 +693,10 @@ export default function ImageEditor() {
     });
   };
 
-  const handleOpenColorFilter = () => {
-    setOpenColorFilter(true);
+  const handleOpenColorFilter = (value) => {
+    setOpenColorFilter(value);
     setReplaceBgOpen(false);
+    setShowCropRect(false);
   };
 
   const removeBackground = async () => {
@@ -520,183 +886,60 @@ export default function ImageEditor() {
 
   return (
     <div className="flex w-full bg-gray-100">
-      {replaceBgOpen && (
-        <div className="h-auto p-6 bg-white">
-          <div
-            className="w-full max-w-lg h-64 mb-6 rounded-lg border border-gray-300 bg-white"
-            style={{
-              backgroundImage: selectedBg ? `url(${selectedBg})` : "none",
-              backgroundSize: "cover",
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "center",
-            }}
-          >
-            <p className="text-center pt-24 text-white font-bold text-xl bg-black/40">
-              {selectedBg ? "Background Set" : "Select an Image"}
-            </p>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px" }}>
-            {bgImage?.map((obj, index) => (
-              <img
-                key={index}
-                src={obj?.img}
-                height={100}
-                width={100}
-                alt={`bg-${index}`}
-                className={`cursor-pointer border-4 rounded-md ${
-                  selectedBg === obj?.img ? "border-blue-500" : "border-transparent"
-                }`}
-                onClick={() => {
-                  const img = new window.Image();
-                  img.src = obj?.img;
-                  img.onload = () => setSelectedBg(img);
-                }}
-              />
-            ))}
-          </div>
-
-          <input
-            type="text"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Enter prompt for replace background"
-            className="my-4 p-4 border w-full"
-          />
-          <button
-            onClick={generateBackground}
-            className="px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50"
-            disabled={!imageObj || !prompt.trim()}
-          >
-            Generate background
-          </button>
-        </div>
-      )}
-      {openColorFilter && (
-        <div className="grid grid-cols-2 md:grid-cols-1 lg:grid-cols-2 gap-4 p-6 bg-white">
-          {Object.keys(filterStyles).map((filterKey, i) => (
-            <button
-              key={i}
-              className="bg-black text-white p-2 rounded-md"
-              onClick={() => applyFilter(filterKey)}
-            >
-              {filterKey.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-            </button>
-          ))}
-        </div>
-      )}
+      <Sidebar
+        replaceBgOpen={replaceBgOpen}
+        selected={selected}
+        setSelectedBg={setSelectedBg}
+        prompt={prompt}
+        setPrompt={setPrompt}
+        generateBackground={generateBackground}
+        imageObj={imageObj}
+        openColorFilter={openColorFilter}
+        applyFilter={applyFilter}
+        addSvg={addSvg}
+        addText={addText}
+        updateFontFamily={updateFontFamily}
+        texts={texts}
+        showCropRect={showCropRect}
+        cropAspectRatio={cropAspectRatio}
+        handleAspectRatioChange={handleAspectRatioChange}
+        setSelected={setSelected}
+        setOpenColorFilter={setOpenColorFilter}
+        originalImageObj={originalImageObj}
+        setCropArea={setCropArea}
+        setImageProps={setImageProps}
+        setImageObj={setImageObj}
+        setShowCropRect={setShowCropRect}
+        handleCrop={handleCrop}
+      />
       <div className="min-h-screen w-full flex flex-col items-center justify-center p-6">
-        <input
-          type="file"
-          accept="image/*"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          style={{ display: "none" }}
+        <Topbar
+          lastCropData={lastCropData}
+          fileInputRef={fileInputRef}
+          handleFileChange={handleFileChange}
+          originalImageObj={originalImageObj}
+          setShowCropRect={setShowCropRect}
+          setImageObj={setImageObj}
+          setImageProps={setImageProps}
+          setCropArea={setCropArea}
+          setSelected={setSelected}
+          showCropRect={showCropRect}
+          handleCrop={handleCrop}
+          removeBackground={removeBackground}
+          imageFile={imageFile}
+          replaceBgPopUpOpen={replaceBgPopUpOpen}
+          upscaleImage={upscaleImage}
+          handleOpenColorFilter={handleOpenColorFilter}
+          imageObj={imageObj}
+          handleDownload={handleDownload}
+          addText={addText}
+          stageHeight={stageHeight}
+          stageWidth={stageWidth}
+          handleAspectRatioChange={handleAspectRatioChange}
+          cropAspectRatio={cropAspectRatio}
+          setOpenColorFilter={setOpenColorFilter}
         />
-        <div className="flex space-x-4 mb-6">
-          <button
-            onClick={() => fileInputRef.current.click()}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Upload Image
-          </button>
-          <button
-            onClick={() => {
-              if (originalImageObj) {
-                setShowCropRect((prev) => {
-                  const isEnteringCropMode = !prev;
-                  if (isEnteringCropMode) {
-                    setImageObj(originalImageObj);
-                    if (lastCropData) {
-                      setImageProps(lastCropData.imagePropsAtCrop);
-                      setCropArea({
-                        x: lastCropData.cropRect.x,
-                        y: lastCropData.cropRect.y,
-                        width: lastCropData.cropRect.width,
-                        height: lastCropData.cropRect.height,
-                      });
-                    } else {
-                      let newWidth = originalImageObj.width;
-                      let newHeight = originalImageObj.height;
-                      if (
-                        originalImageObj.width > stageWidth ||
-                        originalImageObj.height > stageHeight
-                      ) {
-                        const widthRatio = stageWidth / originalImageObj.width;
-                        const heightRatio = stageHeight / originalImageObj.height;
-                        const scale = Math.min(widthRatio, heightRatio);
-                        newWidth = originalImageObj.width * scale;
-                        newHeight = originalImageObj.height * scale;
-                      }
-                      setImageProps({
-                        x: (stageWidth - newWidth) / 2,
-                        y: (stageHeight - newHeight) / 2,
-                        scaleX: newWidth / originalImageObj.width,
-                        scaleY: newHeight / originalImageObj.height,
-                        rotation: 0,
-                        width: originalImageObj.width,
-                        height: originalImageObj.height,
-                      });
-                      setCropArea({
-                        x: (stageWidth - newWidth) / 2,
-                        y: (stageHeight - newHeight) / 2,
-                        width: newWidth,
-                        height: newHeight,
-                      });
-                    }
-                  }
-                  return !prev;
-                });
-                setSelected(false);
-              }
-            }}
-            className="px-6 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50"
-            disabled={!originalImageObj}
-          >
-            {showCropRect ? "Cancel Crop" : "Crop Image"}
-          </button>
-          {showCropRect && (
-            <button
-              onClick={handleCrop}
-              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
-            >
-              Apply Crop
-            </button>
-          )}
-          <button
-            onClick={removeBackground}
-            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
-            disabled={!imageFile}
-          >
-            Remove Background
-          </button>
-          <button
-            onClick={replaceBgPopUpOpen}
-            className="px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50"
-          >
-            Replace background
-          </button>
-          <button
-            onClick={upscaleImage}
-            className="px-6 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50"
-          >
-            Upscale image
-          </button>
-          <button
-            onClick={handleOpenColorFilter}
-            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
-            disabled={!imageObj}
-          >
-            Color filter
-          </button>
-          <button
-            onClick={handleDownload}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-            disabled={!imageObj}
-          >
-            Download Image
-          </button>
-        </div>
-        
+
         <div
           style={{
             border: "2px solid #ccc",
@@ -711,7 +954,7 @@ export default function ImageEditor() {
             height={stageHeight}
             onMouseDown={handleStageClick}
             onTouchStart={handleStageClick}
-            // style={{ cursor: selected && !showCropRect ? "move" : "default" }}
+            style={{ cursor: selected && !showCropRect ? "move" : "default" }}
             ref={stageRef}
           >
             <Layer>
@@ -728,6 +971,7 @@ export default function ImageEditor() {
                   listening={false}
                 />
               )}
+
               {imageObj && (
                 <>
                   <KonvaImage
@@ -790,6 +1034,7 @@ export default function ImageEditor() {
                   )}
                 </>
               )}
+
               {showCropRect && (
                 <>
                   <Rect
@@ -805,12 +1050,14 @@ export default function ImageEditor() {
                     dragBoundFunc={(pos) => {
                       const imageNode = imageNodeRef.current;
                       if (!imageNode) return pos;
+
                       const imageClientRect = imageNode.getClientRect();
                       let newX = pos.x;
                       let newY = pos.y;
                       const cropWidth = cropRectRef.current.width() * cropRectRef.current.scaleX();
                       const cropHeight =
                         cropRectRef.current.height() * cropRectRef.current.scaleY();
+
                       if (newX < imageClientRect.x) newX = imageClientRect.x;
                       if (newY < imageClientRect.y) newY = imageClientRect.y;
                       if (newX + cropWidth > imageClientRect.x + imageClientRect.width) {
@@ -819,6 +1066,7 @@ export default function ImageEditor() {
                       if (newY + cropHeight > imageClientRect.y + imageClientRect.height) {
                         newY = imageClientRect.y + imageClientRect.height - cropHeight;
                       }
+
                       return { x: newX, y: newY };
                     }}
                     onTransformEnd={() => {
@@ -827,6 +1075,7 @@ export default function ImageEditor() {
                       const scaleY = node.scaleY();
                       node.scaleX(1);
                       node.scaleY(1);
+
                       setCropArea({
                         x: node.x(),
                         y: node.y(),
@@ -861,10 +1110,13 @@ export default function ImageEditor() {
                       if (newBox.width < 30 || newBox.height < 30) {
                         return oldBox;
                       }
+
                       const imageNode = imageNodeRef.current;
                       if (!imageNode) return newBox;
+
                       const imageClientRect = imageNode.getClientRect();
                       let constrainedNewBox = { ...newBox };
+
                       if (constrainedNewBox.x < imageClientRect.x) {
                         constrainedNewBox.width -= imageClientRect.x - constrainedNewBox.x;
                         constrainedNewBox.x = imageClientRect.x;
@@ -887,6 +1139,7 @@ export default function ImageEditor() {
                         constrainedNewBox.height =
                           imageClientRect.y + imageClientRect.height - constrainedNewBox.y;
                       }
+
                       constrainedNewBox.width = Math.max(30, constrainedNewBox.width);
                       constrainedNewBox.height = Math.max(30, constrainedNewBox.height);
 
@@ -917,6 +1170,43 @@ export default function ImageEditor() {
               ))}
               {selected && !isEditing && <Transformer ref={trRef} />}
             </Layer>
+            <Layer>
+              {images.map(({ id, image, x, y }) => (
+                <KonvaImage
+                  key={id}
+                  id={`img-${id}`}
+                  image={image}
+                  x={x}
+                  y={y}
+                  draggable
+                  onClick={(e) => {
+                    e.cancelBubble = true;
+                    onSelectImage(id);
+                  }}
+                  onDragEnd={(e) => {
+                    const posX = e.target.x();
+                    const posY = e.target.y();
+                    setImages((prev) =>
+                      prev.map((img) => (img.id === id ? { ...img, x: posX, y: posY } : img)),
+                    );
+                  }}
+                />
+              ))}
+              <Transformer
+                ref={transformerRef}
+                rotateEnabled
+                enabledAnchors={[
+                  "top-left",
+                  "top-center",
+                  "top-right",
+                  "middle-left",
+                  "middle-right",
+                  "bottom-left",
+                  "bottom-center",
+                  "bottom-right",
+                ]}
+              />
+            </Layer>
           </Stage>
           {isEditing && (
             <textarea
@@ -930,6 +1220,16 @@ export default function ImageEditor() {
           )}
         </div>
       </div>
+      <ColorPickerListSvg
+        selectedId={selectedId}
+        colorKeys={colorKeys}
+        fillTypeMap={fillTypeMap}
+        onColorChange={onColorChange}
+        colorMap={colorMap}
+        gradientMap={gradientMap}
+        togglePicker={togglePicker}
+        pickerVisibility={pickerVisibility}
+      />
     </div>
   );
 }
