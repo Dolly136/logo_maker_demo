@@ -77,6 +77,24 @@ export default function ImageEditor() {
   const transformerRef = useRef();
   const imageNodeRef = useRef();
   const [layerList, setLayerList] = useState([]);
+  const [showLayerList, setShowLayerList] = useState(false);
+  const shapeRefs = useRef({});
+
+  console.log(layerList, "layerList")
+
+  const [selectedType, setSelectedType] = useState(null);
+
+  useEffect(() => {
+    const transformer = transformerRef.current;
+    const node = shapeRefs.current[selectedId];
+    if (transformer && node) {
+      transformer.nodes([node]);
+      transformer.getLayer().batchDraw();
+    } else if (transformer) {
+      transformer.nodes([]);
+    }
+  }, [selectedId]);
+
   useEffect(() => {
     const newLayerList = [];
 
@@ -97,167 +115,11 @@ export default function ImageEditor() {
     });
 
     images.forEach((img) => {
-      newLayerList.push({ ...img, id: img.id, type: "extraImage", label: "Image" });
+      newLayerList.push({ ...img, id: img.id, type: "extraImage", label: "Svg" });
     });
 
     setLayerList(newLayerList);
   }, [selectedBg, imageObj, texts, images, showCropRect]);
-
-  const togglePicker = (key, type) => {
-    setPickerVisibility((prev) => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        [type]: !prev[key]?.[type],
-      },
-    }));
-  };
-
-  async function addSvg(url) {
-    console.log(url, "url");
-    try {
-      const svgText = await fetchSvgText(url);
-      const colors = extractColors(svgText);
-      const initialMap = {};
-      const typeMap = {};
-      colors.forEach((c) => {
-        initialMap[c] = c;
-        typeMap[c] = "color";
-      });
-
-      svgToImage(svgText, (img) => {
-        const id = Date.now().toString();
-
-        pushUndoState({
-          images,
-          selectedId,
-          colorMap,
-          fillTypeMap,
-          gradientMap,
-          colorKeys,
-        });
-
-        setImages((prev) => [
-          ...prev,
-          {
-            id,
-            x: 50 + prev.length * 30,
-            y: 50 + prev.length * 30,
-            svgText,
-            originalColors: colors,
-            image: img,
-            url,
-          },
-        ]);
-        setSelectedId(id);
-        setColorKeys(colors);
-        setColorMap(initialMap);
-        setFillTypeMap(typeMap);
-        setRedoStack([]);
-      });
-    } catch (error) {
-      alert("Failed to load SVG: " + error.message);
-    }
-  }
-
-  function pushUndoState(state) {
-    setUndoStack((prev) => [...prev, state]);
-  }
-
-  function updateImageColors(
-    imgObj,
-    newColorMap,
-    newFillTypeMap = fillTypeMap,
-    newGradientMap = gradientMap,
-  ) {
-    const newSvg = replaceColorsWithGradients(
-      imgObj.svgText,
-      newColorMap,
-      newFillTypeMap,
-      newGradientMap,
-    );
-    svgToImage(newSvg, (img) => {
-      setImages((prev) => prev.map((i) => (i.id === imgObj.id ? { ...i, image: img } : i)));
-    });
-  }
-
-  function onColorChange(origColor, newColor, isGradient = false) {
-    if (!selectedId) return;
-
-    pushUndoState({
-      images,
-      selectedId,
-      colorMap,
-      fillTypeMap,
-      gradientMap,
-      colorKeys,
-    });
-
-    setRedoStack([]);
-
-    const newFillTypes = { ...fillTypeMap, [origColor]: isGradient ? "gradient" : "color" };
-    setFillTypeMap(newFillTypes);
-
-    const updatedMap = {
-      ...colorMap,
-      [origColor]: isGradient ? origColor : newColor.hex,
-    };
-    setColorMap(updatedMap);
-
-    if (isGradient) {
-      setGradientMap((prev) => ({
-        ...prev,
-        [origColor]: { start: newColor.start, end: newColor.end },
-      }));
-    }
-
-    const currentImg = images.find((i) => i.id === selectedId);
-    if (currentImg)
-      updateImageColors(currentImg, updatedMap, newFillTypes, {
-        ...gradientMap,
-        ...(isGradient && {
-          [origColor]: {
-            start: newColor.start,
-            end: newColor.end,
-          },
-        }),
-      });
-  }
-
-  function onSelectImage(id) {
-    setSelectedId(id);
-    const img = images.find((i) => i.id === id);
-    if (!img) return;
-    const newMap = {};
-    const newFillTypes = {};
-    img.originalColors.forEach((c) => {
-      newMap[c] = colorMap[c] || c;
-      newFillTypes[c] = fillTypeMap[c] || "color";
-    });
-    setColorKeys(img.originalColors);
-    setColorMap(newMap);
-    setFillTypeMap(newFillTypes);
-  }
-
-  function deleteSelectedImage() {
-    if (!selectedId) return;
-    pushUndoState({
-      images,
-      selectedId,
-      colorMap,
-      fillTypeMap,
-      gradientMap,
-      colorKeys,
-    });
-    setRedoStack([]);
-
-    setImages((prev) => prev.filter((img) => img.id !== selectedId));
-    setSelectedId(null);
-    setColorKeys([]);
-    setColorMap({});
-    setFillTypeMap({});
-    setGradientMap({});
-  }
 
   useEffect(() => {
     if (!transformerRef.current) return;
@@ -403,6 +265,147 @@ export default function ImageEditor() {
     }
   }, [showCropRect]);
 
+  const togglePicker = (key, type) => {
+    setPickerVisibility((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        [type]: !prev[key]?.[type],
+      },
+    }));
+  };
+
+  async function addSvg(url) {
+    console.log(url, "url");
+    try {
+      const svgText = await fetchSvgText(url);
+      const colors = extractColors(svgText);
+      const initialMap = {};
+      const typeMap = {};
+      colors.forEach((c) => {
+        initialMap[c] = c;
+        typeMap[c] = "color";
+      });
+
+      svgToImage(svgText, (img) => {
+        const id = Date.now().toString();
+
+        pushUndoState({
+          images,
+          selectedId,
+          colorMap,
+          fillTypeMap,
+          gradientMap,
+          colorKeys,
+        });
+
+        setImages((prev) => [
+          ...prev,
+          {
+            id,
+            x: 50 + prev.length * 30,
+            y: 50 + prev.length * 30,
+            svgText,
+            originalColors: colors,
+            image: img,
+            url,
+          },
+        ]);
+        setSelectedId(id);
+        setColorKeys(colors);
+        setColorMap(initialMap);
+        setFillTypeMap(typeMap);
+        setRedoStack([]);
+      });
+    } catch (error) {
+      alert("Failed to load SVG: " + error.message);
+    }
+  }
+
+  function pushUndoState(state) {
+    setUndoStack((prev) => [...prev, state]);
+  }
+
+  function updateImageColors(
+    imgObj,
+    newColorMap,
+    newFillTypeMap = fillTypeMap,
+    newGradientMap = gradientMap,
+  ) {
+    const newSvg = replaceColorsWithGradients(
+      imgObj.svgText,
+      newColorMap,
+      newFillTypeMap,
+      newGradientMap,
+    );
+    svgToImage(newSvg, (img) => {
+      setImages((prev) => prev.map((i) => (i.id === imgObj.id ? { ...i, image: img } : i)));
+    });
+  }
+
+  function onColorChange(origColor, newColor, isGradient = false) {
+    if (!selectedId) return;
+
+    pushUndoState({
+      images,
+      selectedId,
+      colorMap,
+      fillTypeMap,
+      gradientMap,
+      colorKeys,
+    });
+
+    setRedoStack([]);
+
+    const newFillTypes = { ...fillTypeMap, [origColor]: isGradient ? "gradient" : "color" };
+    setFillTypeMap(newFillTypes);
+
+    const updatedMap = {
+      ...colorMap,
+      [origColor]: isGradient ? origColor : newColor.hex,
+    };
+    setColorMap(updatedMap);
+
+    if (isGradient) {
+      setGradientMap((prev) => ({
+        ...prev,
+        [origColor]: { start: newColor.start, end: newColor.end },
+      }));
+    }
+
+    const currentImg = images.find((i) => i.id === selectedId);
+    if (currentImg)
+      updateImageColors(currentImg, updatedMap, newFillTypes, {
+        ...gradientMap,
+        ...(isGradient && {
+          [origColor]: {
+            start: newColor.start,
+            end: newColor.end,
+          },
+        }),
+      });
+  }
+
+  function deleteSelectedImage() {
+    if (!selectedId) return;
+    pushUndoState({
+      images,
+      selectedId,
+      colorMap,
+      fillTypeMap,
+      gradientMap,
+      colorKeys,
+    });
+    setRedoStack([]);
+
+    setImages((prev) => prev.filter((img) => img.id !== selectedId));
+    setSelectedId(null);
+    setColorKeys([]);
+    setColorMap({});
+    setFillTypeMap({});
+    setGradientMap({});
+  }
+
   function handleUndo() {
     if (undoStack.length === 0) return;
     const lastState = undoStack[undoStack.length - 1];
@@ -508,21 +511,6 @@ export default function ImageEditor() {
     updateTextStyle("textDecoration", newStyle);
   };
 
-  const shapeRefs = useRef({});
-
-  const [selectedType, setSelectedType] = useState(null);
-
-  useEffect(() => {
-    const transformer = transformerRef.current;
-    const node = shapeRefs.current[selectedId];
-    if (transformer && node) {
-      transformer.nodes([node]);
-      transformer.getLayer().batchDraw();
-    } else if (transformer) {
-      transformer.nodes([]);
-    }
-  }, [selectedId]);
-
   const handleSelect = (id, type) => {
     setSelectedId(id);
     setSelectedType(type);
@@ -594,15 +582,6 @@ export default function ImageEditor() {
     setEditingTextId(null);
   };
 
-  const handleDragEnd = (type, id, pos) => {
-    if (type === "image") {
-      setImages((prev) =>
-        prev.map((img) => (img.id === id ? { ...img, x: pos.x, y: pos.y } : img)),
-      );
-    } else if (type === "text") {
-      setTexts((prev) => prev.map((txt) => (txt.id === id ? { ...txt, x: pos.x, y: pos.y } : txt)));
-    }
-  };
   const applyFilter = (filterKey) => {
     const imageNode = imageNodeRef.current;
     const filter = filterStyles[filterKey];
@@ -1010,6 +989,23 @@ export default function ImageEditor() {
     }
   };
 
+  useEffect(() => {
+    const disableScroll = () => {
+      document.body.style.overflow = "hidden";
+    };
+    const enableScroll = () => {
+      document.body.style.overflow = "";
+    };
+
+    window.addEventListener("dragstart", disableScroll);
+    window.addEventListener("dragend", enableScroll);
+
+    return () => {
+      window.removeEventListener("dragstart", disableScroll);
+      window.removeEventListener("dragend", enableScroll);
+    };
+  }, []);
+
   const onDragEnd = (result) => {
     if (!result.destination) return;
 
@@ -1018,7 +1014,9 @@ export default function ImageEditor() {
     reordered.splice(result.destination.index, 0, moved);
     setLayerList(reordered);
 
+    // Update Konva stacking
     setTimeout(() => {
+      // Bottom-to-top stacking (first is bottom)
       reordered.forEach((item) => {
         const node = shapeRefs.current[item.id];
         if (node) node.moveToTop();
@@ -1041,7 +1039,6 @@ export default function ImageEditor() {
         applyFilter={applyFilter}
         addSvg={addSvg}
         addText={addText}
-        updateFontFamily={updateFontFamily}
         texts={texts}
         showCropRect={showCropRect}
         cropAspectRatio={cropAspectRatio}
@@ -1082,35 +1079,84 @@ export default function ImageEditor() {
           handleDownload={handleDownload}
           stageHeight={stageHeight}
           stageWidth={stageWidth}
-          handleAspectRatioChange={handleAspectRatioChange}
-          cropAspectRatio={cropAspectRatio}
           setOpenColorFilter={setOpenColorFilter}
         />
+
+        <button
+          onClick={() => setShowLayerList((prev) => !prev)}
+          className="mb-4 px-4 py-2 bg-blue-600 text-white rounded shadow"
+        >
+          {showLayerList ? "Hide Layers" : "Show Layers"}
+        </button>
+
 
         <DragDropContext onDragEnd={onDragEnd}>
           <Droppable droppableId="layer-list">
             {(provided) => (
-              <div ref={provided.innerRef} {...provided.droppableProps}>
-                {layerList.map((item, index) => (
-                  <Draggable key={item.id} draggableId={item.id} index={index}>
-                    {(provided) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                        className="p-2 mb-2 bg-gray-100 rounded shadow cursor-pointer"
-                        onClick={() => handleSelect(item.id, item.type)}
-                      >
-                        {item.label}
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-              </div>
+              <>
+                {showLayerList && (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="p-2 border rounded w-[240px] bg-white max-h-[400px] overflow-y-auto"
+                  >
+                    {layerList.map((item, index) => (
+                      <Draggable key={item.id} draggableId={item.id.toString()} index={index}>
+                        {(provided) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className="p-2 mb-2 bg-gray-100 rounded shadow-sm flex items-center gap-2 hover:bg-gray-200 cursor-pointer"
+                            onClick={() => handleSelect(item.id, item.type)}
+                          >
+                            {/* Preview based on type */}
+                            <div className="w-10 h-10 flex items-center justify-center border rounded overflow-hidden bg-white">
+                              {item.type === "mainImage" && (
+                                <img
+                                  src="./frame.jpg"
+                                  alt="Main"
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+
+                              {item.type === "text" && (
+                                <span
+                                  style={{
+                                    fontSize: "12px",
+                                    fontFamily: item.fontFamily,
+                                    color: item.fill,
+                                    fontStyle: item.fontStyle,
+                                    textDecoration: item.textDecoration,
+                                  }}
+                                >
+                                  A
+                                </span>
+                              )}
+
+                              {item.type === "extraImage" && item.url && (
+                                <img
+                                  src={item.url}
+                                  alt="SVG"
+                                  className="w-full h-full object-contain"
+                                />
+                              )}
+                            </div>
+
+                            {/* Label */}
+                            <div className="text-sm truncate">{item.label}</div>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </>
             )}
           </Droppable>
         </DragDropContext>
+
         <div
           style={{
             border: "2px solid #ccc",

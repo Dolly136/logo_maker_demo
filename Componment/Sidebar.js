@@ -16,7 +16,6 @@ const Sidebar = ({
   addSvg,
   selected,
   addText,
-  updateFontFamily,
   texts,
   showCropRect,
   handleAspectRatioChange,
