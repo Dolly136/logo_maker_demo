@@ -13,9 +13,11 @@ const ColorPickerListSvg = ({
 }) => {
   return (
     <div>
-      <div className="w-100">
+      {/* <div className="w-100"> */}
         {selectedId && colorKeys.length > 0 && (
-          <div className="h-[1000px] overflow-auto bg-white p-6">
+          <div 
+          // className="h-[1000px] overflow-auto bg-white p-6"
+          >
             <h3 className="text-lg font-semibold mb-3">Edit Colors</h3>
             <div className="space-y-6">
               {colorKeys.slice(1).map((orig) => (
@@ -115,7 +117,7 @@ const ColorPickerListSvg = ({
             </div>
           </div>
         )}
-      </div>
+      {/* </div> */}
     </div>
   );
 };

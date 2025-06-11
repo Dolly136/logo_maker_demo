@@ -3,6 +3,11 @@ import { filterStyles } from "@/utils/filterStyles";
 import { SVG_LIST } from "@/utils/svg_icon_list";
 import { SVG_SHAPE_LIST } from "@/utils/svg_shape_list";
 import { aspectRatios } from "@/utils/servicesFunction";
+import { fontList } from "@/utils/fontList";
+import ColorPickerListSvg from "./ColorPickerListSvg";
+import { UploadCloud } from "lucide-react";
+
+const ITEMS_PER_PAGE = 4;
 
 const Sidebar = ({
   replaceBgOpen,
@@ -29,14 +34,50 @@ const Sidebar = ({
   setShowCropRect,
   handleCrop,
   selectedId,
+  selectedType,
   updateTextStyle,
   toggleBold,
   toggleItalic,
   toggleUnderline,
   toggleTextTransform,
+  colorKeys,
+  fillTypeMap,
+  onColorChange,
+  colorMap,
+  gradientMap,
+  togglePicker,
+  pickerVisibility,
+  selectedSvgObj,
+  handleAddUploadedImageToCanvas,
+  uploadedImages,
+  handleFileChange,
+  fileInputRef
 }) => {
   const [activeTab, setActiveTab] = useState("shapes");
-  console.log(openColorFilter, "openColorFilter");
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const getPaginatedItems = () => {
+    const list =
+      activeTab === "shapes"
+        ? SVG_SHAPE_LIST
+        : activeTab === "icons"
+          ? SVG_LIST
+          : [];
+
+    const start = currentPage * ITEMS_PER_PAGE;
+    return list.slice(start, start + ITEMS_PER_PAGE);
+  };
+
+  const totalPages =
+    activeTab === "texts"
+      ? 1
+      : Math.ceil(
+        (activeTab === "shapes"
+          ? SVG_SHAPE_LIST.length
+          : activeTab === "icons"
+            ? SVG_LIST.length
+            : 0) / ITEMS_PER_PAGE
+      );
 
   const getAspectClass = (value) => {
     if (value === 1) return "aspect-square";
@@ -50,196 +91,6 @@ const Sidebar = ({
     if (value === 2 / 3) return "aspect-[2/3]";
     return "w-full h-full";
   };
-  const fontList = [
-    { name: "Roboto Slab", value: "Roboto Slab, serif", style: "Roboto Slab, serif" },
-    {
-      name: "Playfair Display",
-      value: "Playfair Display, serif",
-      style: "Playfair Display, serif",
-    },
-    { name: "Noto Serif", value: "'Noto Serif', serif", style: "'Noto Serif', serif" },
-    { name: "Crimson Text", value: "'Crimson Text', serif", style: "'Crimson Text', serif" },
-    { name: "Cormorant", value: "'Cormorant', serif", style: "'Cormorant', serif" },
-    { name: "Abril Fatface", value: "Abril Fatface, serif", style: "Abril Fatface, serif" },
-    { name: "Chicle", value: "Chicle, serif", style: "Chicle, serif" },
-    { name: "Shrikhand", value: "Shrikhand, serif", style: "Shrikhand, serif" },
-    {
-      name: "Cinzel Decorative",
-      value: "Cinzel Decorative, serif",
-      style: "Cinzel Decorative, serif",
-    },
-    { name: "Rye", value: "Rye, serif", style: "Rye, serif" },
-    { name: "Arvo", value: "Arvo, serif", style: "Arvo, serif" },
-    { name: "Crete Round", value: "Crete Round, serif", style: "Crete Round, serif" },
-    { name: "Josefin Slab", value: "Josefin Slab, serif", style: "Josefin Slab, serif" },
-    { name: "Alfa Slab One", value: "Alfa Slab One, serif", style: "Alfa Slab One, serif" },
-    { name: "Slabo 27px", value: "Slabo 27px, serif", style: "Slabo 27px, serif" },
-    { name: "Ultra", value: "Ultra, serif", style: "Ultra, serif" },
-    { name: "Vast Shadow", value: "Vast Shadow, serif", style: "Vast Shadow, serif" },
-    { name: "Caudex", value: "Caudex, serif", style: "Caudex, serif" },
-    { name: "Patua One", value: "Patua One, serif", style: "Patua One, serif" },
-    { name: "Bree Serif", value: "Bree Serif, serif", style: "Bree Serif, serif" },
-    { name: "Roboto", value: "Roboto, sans-serif", style: "Roboto, sans-serif" },
-    { name: "Open Sans", value: "Open Sans, sans-serif", style: "Open Sans, sans-serif" },
-    { name: "Lato", value: "Lato, sans-serif", style: "Lato, sans-serif" },
-    { name: "Montserrat", value: "Montserrat, sans-serif", style: "Montserrat, sans-serif" },
-    { name: "Poppins", value: "Poppins, sans-serif", style: "Poppins, sans-serif" },
-    { name: "Inter", value: "Inter, sans-serif", style: "Inter, sans-serif" },
-    { name: "Raleway", value: "Raleway, sans-serif", style: "Raleway, sans-serif" },
-    { name: "Nunito", value: "Nunito, sans-serif", style: "Nunito, sans-serif" },
-    { name: "Mulish", value: "Mulish, sans-serif", style: "Mulish, sans-serif" },
-    { name: "Bebas Neue", value: "Bebas Neue, sans-serif", style: "Bebas Neue, sans-serif" },
-    { name: "Teko", value: "Teko, sans-serif", style: "Teko, sans-serif" },
-    { name: "Lilita One", value: "Lilita One, sans-serif", style: "Lilita One, sans-serif" },
-    {
-      name: "Archivo Black",
-      value: "Archivo Black, sans-serif",
-      style: "Archivo Black, sans-serif",
-    },
-    { name: "Passion One", value: "Passion One, sans-serif", style: "Passion One, sans-serif" },
-    {
-      name: "Racing Sans One",
-      value: "Racing Sans One, sans-serif",
-      style: "Racing Sans One, sans-serif",
-    },
-    { name: "Titan One", value: "Titan One, sans-serif", style: "Titan One, sans-serif" },
-    { name: "Federo", value: "Federo, sans-serif", style: "Federo, sans-serif" },
-    { name: "Ubuntu", value: "Ubuntu, sans-serif", style: "Ubuntu, sans-serif" },
-    { name: "Quicksand", value: "Quicksand, sans-serif", style: "Quicksand, sans-serif" },
-    { name: "Josefin Sans", value: "Josefin Sans, sans-serif", style: "Josefin Sans, sans-serif" },
-    { name: "Bungee", value: "Bungee, display", style: "Bungee, display" },
-    { name: "Anton", value: "Anton, display", style: "Anton, display" },
-    { name: "Oswald", value: "Oswald, display", style: "Oswald, display" },
-    { name: "Righteous", value: "Righteous, display", style: "Righteous, display" },
-    { name: "Lobster", value: "Lobster, display", style: "Lobster, display" },
-    { name: "Pacifico", value: "Pacifico, display", style: "Pacifico, display" },
-    { name: "Fredoka", value: "Fredoka, display", style: "Fredoka, display" },
-    { name: "Monoton", value: "Monoton, display", style: "Monoton, display" },
-    {
-      name: "Fredericka the Great",
-      value: "Fredericka the Great, display",
-      style: "Fredericka the Great, display",
-    },
-    { name: "Black Ops One", value: "Black Ops One, display", style: "Black Ops One, display" },
-    { name: "Ruslan Display", value: "Ruslan Display, display", style: "Ruslan Display, display" },
-    { name: "Orbitron", value: "Orbitron, display", style: "Orbitron, display" },
-    { name: "Bangers", value: "Bangers, display", style: "Bangers, display" },
-    {
-      name: "Cinzel Decorative",
-      value: "Cinzel Decorative, display",
-      style: "Cinzel Decorative, display",
-    },
-    { name: "Chewy", value: "Chewy, display", style: "Chewy, display" },
-    { name: "Creepster", value: "Creepster, display", style: "Creepster, display" },
-    { name: "Faster One", value: "Faster One, display", style: "Faster One, display" },
-    {
-      name: "Zilla Slab Highlight",
-      value: "Zilla Slab Highlight, display",
-      style: "Zilla Slab Highlight, display",
-    },
-    { name: "Unica One", value: "Unica One, display", style: "Unica One, display" },
-    { name: "Sonsie One", value: "Sonsie One, display", style: "Sonsie One, display" },
-    { name: "Fira Code", value: "Fira Code, monospace", style: "Fira Code, monospace" },
-    {
-      name: "JetBrains Mono",
-      value: "JetBrains Mono, monospace",
-      style: "JetBrains Mono, monospace",
-    },
-    {
-      name: "Source Code Pro",
-      value: "Source Code Pro, monospace",
-      style: "Source Code Pro, monospace",
-    },
-    { name: "Inconsolata", value: "Inconsolata, monospace", style: "Inconsolata, monospace" },
-    { name: "Roboto Mono", value: "Roboto Mono, monospace", style: "Roboto Mono, monospace" },
-    { name: "Space Mono", value: "Space Mono, monospace", style: "Space Mono, monospace" },
-    {
-      name: "IBM Plex Mono",
-      value: "IBM Plex Mono, monospace",
-      style: "IBM Plex Mono, monospace",
-    },
-    { name: "Cousine", value: "Cousine, monospace", style: "Cousine, monospace" },
-    { name: "PT Mono", value: "PT Mono, monospace", style: "PT Mono, monospace" },
-    { name: "Ubuntu Mono", value: "Ubuntu Mono, monospace", style: "Ubuntu Mono, monospace" },
-    { name: "DM Mono", value: "DM Mono, monospace", style: "DM Mono, monospace" },
-    { name: "Lekton", value: "Lekton, monospace", style: "Lekton, monospace" },
-    { name: "Syne Mono", value: "Syne Mono, monospace", style: "Syne Mono, monospace" },
-    {
-      name: "Courier Prime",
-      value: "'Courier Prime', monospace",
-      style: "'Courier Prime', monospace",
-    },
-    { name: "Cutive Mono", value: "'Cutive Mono', monospace", style: "'Cutive Mono', monospace" },
-    {
-      name: "Share Tech Mono",
-      value: "'Share Tech Mono', monospace",
-      style: "'Share Tech Mono', monospace",
-    },
-    { name: "Oxygen Mono", value: "'Oxygen Mono', monospace", style: "'Oxygen Mono', monospace" },
-    { name: "VT323", value: "'VT323', monospace", style: "'VT323', monospace" },
-    {
-      name: "Overpass Mono",
-      value: "'Overpass Mono', monospace",
-      style: "'Overpass Mono', monospace",
-    },
-    {
-      name: "Anonymous Pro",
-      value: "'Anonymous Pro', monospace",
-      style: "'Anonymous Pro', monospace",
-    },
-    { name: "Yellowtail", value: "Yellowtail, cursive", style: "Yellowtail, cursive" },
-    {
-      name: "Gloria Hallelujah",
-      value: "Gloria Hallelujah, cursive",
-      style: "Gloria Hallelujah, cursive",
-    },
-    {
-      name: "Cedarville Cursive",
-      value: "Cedarville Cursive, cursive",
-      style: "Cedarville Cursive, cursive",
-    },
-    { name: "Style Script", value: "Style Script, cursive", style: "Style Script, cursive" },
-    { name: "Cookie", value: '"Cookie", cursive', style: '"Cookie", cursive' },
-    { name: "Coming Soon", value: '"Coming Soon", cursive', style: '"Coming Soon", cursive' },
-    { name: "Great Vibes", value: '"Great Vibes", cursive', style: '"Great Vibes", cursive' },
-    { name: "Luckiest Guy", value: '"Luckiest Guy", cursive', style: '"Luckiest Guy", cursive' },
-    { name: "Rock Salt", value: '"Rock Salt", cursive', style: '"Rock Salt", cursive' },
-    { name: "Zeyada", value: '"Zeyada", cursive', style: '"Zeyada", cursive' },
-    {
-      name: "La Belle Aurore",
-      value: '"La Belle Aurore", cursive',
-      style: '"La Belle Aurore", cursive',
-    },
-    {
-      name: "Give You Glory",
-      value: '"Give You Glory", cursive',
-      style: '"Give You Glory", cursive',
-    },
-    { name: "Reenie Beanie", value: '"Reenie Beanie", cursive', style: '"Reenie Beanie", cursive' },
-    { name: "Kristi", value: '"Kristi", cursive', style: '"Kristi", cursive' },
-    {
-      name: "Just Another Hand",
-      value: '"Just Another Hand", cursive',
-      style: '"Just Another Hand", cursive',
-    },
-    {
-      name: "Homemade Apple",
-      value: '"Homemade Apple", cursive',
-      style: '"Homemade Apple", cursive',
-    },
-    { name: "Handlee", value: '"Handlee", cursive', style: '"Handlee", cursive' },
-    {
-      name: "Architects Daughter",
-      value: '"Architects Daughter", cursive',
-      style: '"Architects Daughter", cursive',
-    },
-    { name: "Allura", value: '"Allura", cursive', style: '"Allura", cursive' },
-    {
-      name: "Covered By Your Grace",
-      value: '"Covered By Your Grace", cursive',
-      style: '"Covered By Your Grace", cursive',
-    },
-  ];
 
   const bgImage = [
     { img: "./01.jpg" },
@@ -280,9 +131,8 @@ const Sidebar = ({
                   height={100}
                   width={100}
                   alt={`bg-${index}`}
-                  className={`cursor-pointer border-4 rounded-md ${
-                    selected === obj?.img ? "border-blue-500" : "border-transparent"
-                  }`}
+                  className={`cursor-pointer border-4 rounded-md ${selected === obj?.img ? "border-blue-500" : "border-transparent"
+                    }`}
                   onClick={() => {
                     const img = new window.Image();
                     img.src = obj?.img;
@@ -330,166 +180,202 @@ const Sidebar = ({
             <div className="flex space-x-4 mb-4">
               <button
                 onClick={() => setActiveTab("icons")}
-                className={`px-4 py-2 rounded ${
-                  activeTab === "icons" ? "bg-blue-600 text-white" : "bg-gray-200"
-                }`}
+                className={`px-4 py-2 rounded ${activeTab === "icons" ? "bg-blue-600 text-white" : "bg-gray-200"
+                  }`}
               >
                 Icons
               </button>
               <button
                 onClick={() => setActiveTab("shapes")}
-                className={`px-4 py-2 rounded ${
-                  activeTab === "shapes" ? "bg-blue-600 text-white" : "bg-gray-200"
-                }`}
+                className={`px-4 py-2 rounded ${activeTab === "shapes" ? "bg-blue-600 text-white" : "bg-gray-200"
+                  }`}
               >
                 Shapes
               </button>
               <button
                 onClick={() => setActiveTab("texts")}
-                className={`px-4 py-2 rounded ${
-                  activeTab === "texts" ? "bg-blue-600 text-white" : "bg-gray-200"
-                }`}
+                className={`px-4 py-2 rounded ${activeTab === "texts" ? "bg-blue-600 text-white" : "bg-gray-200"
+                  }`}
               >
                 Add Text
+              </button>
+              <button
+                onClick={() => setActiveTab("media")}
+                className={`px-4 py-2 rounded ${activeTab === "media" ? "bg-blue-600 text-white" : "bg-gray-200"
+                  }`}
+              >
+                Uploaded Media
               </button>
             </div>
 
             <div className="h-[1000px] overflow-y-auto pr-2">
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                {(activeTab === "shapes"
-                  ? SVG_SHAPE_LIST
-                  : activeTab === "icons"
-                  ? SVG_LIST
-                  : []
-                ).map(({ id, name, url }) => (
-                  <button
-                    key={id}
-                    onClick={() => addSvg(url)}
-                    className="border rounded hover:border-blue-500 p-1"
-                    title={name}
-                  >
-                    <img
-                      src={url}
-                      alt={name}
-                      className="w-full h-14 object-contain"
-                      onError={(e) => (e.currentTarget.src = "")}
-                    />
-                  </button>
-                ))}
+              <div className="grid grid-cols-2 gap-3 mb-6 relative">
+                {/* SVG / ICON Buttons */}
+                {["shapes", "icons"].includes(activeTab) &&
+                  getPaginatedItems().map(({ id, name, url }) => (
+                    <button
+                      key={id}
+                      onClick={() => addSvg(url)}
+                      className="border rounded hover:border-blue-500 p-1"
+                      title={name}
+                    >
+                      <img
+                        src={url}
+                        alt={name}
+                        className="w-full h-14 object-contain"
+                        onError={(e) => (e.currentTarget.src = "")}
+                      />
+                    </button>
+                  ))}
 
                 {activeTab === "texts" && (
                   <>
-                    <button
-                      onClick={() => addText("Thanks a Bunch", "Monoton")}
-                      className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2"
-                    >
-                      Monoton
-                    </button>
-                    <button
-                      onClick={() => addText("Hello Stylish", "Lobster")}
-                      className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2"
-                    >
-                      Lobster
-                    </button>
-                    <button
-                      onClick={() => addText("Elegant Text", "Pacifico")}
-                      className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2"
-                    >
-                      Pacifico
-                    </button>
-                    <button
-                      onClick={() => addText("Elegant Title", "Playfair Display")}
-                      className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2"
-                    >
-                      Playfair Display
-                    </button>
-                    <button
-                      onClick={() => addText("Simple Body", "Poppins")}
-                      className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2"
-                    >
-                      Poppins
-                    </button>
-                    <button
-                      onClick={() => addText("Plain Text", "Roboto")}
-                      className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2"
-                    >
-                      Roboto
-                    </button>
-                    <button
-                      onClick={async () => {
-                        await document.fonts.load("16px 'Dancing Script'");
-                        addText("Beautiful!", "Dancing Script,cursive");
-                      }}
-                      className="border px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-                    >
-                      Add Dancing Script Text
-                    </button>
-                    <button
-                      onClick={() => addText("BIRTHDAY BASH", "Anton")}
-                      className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2 mb-4 ml-2"
-                    >
-                      Add Bold Title
-                    </button>
-                    {selectedId && (
-                      <div className="p-4 max-w-5xl mx-auto">
-                        <div className="flex flex-wrap gap-3 items-center border p-4 rounded-lg shadow mb-6 bg-white">
-                          <select
-                            onChange={(e) => updateTextStyle("fontFamily", e.target.value)}
-                            value={texts.find((t) => t.id === selectedId)?.fontFamily || ""}
-                            className="border p-2 rounded"
-                          >
-                            <option value="">Font</option>
-                            {fontList.map((f) => (
-                              <option key={f.name} value={f.name} style={{ fontFamily: f.style }}>
-                                {f.name}
-                              </option>
-                            ))}
-                          </select>
-
-                          <input
-                            type="number"
-                            min={10}
-                            max={150}
-                            className="border p-2 w-24 rounded"
-                            value={texts.find((t) => t.id === selectedId)?.fontSize || 40}
-                            onChange={(e) => updateTextStyle("fontSize", parseInt(e.target.value))}
-                          />
-
-                          <input
-                            type="color"
-                            className="w-10 h-10 rounded border"
-                            value={texts.find((t) => t.id === selectedId)?.fill || "#000000"}
-                            onChange={(e) => updateTextStyle("fill", e.target.value)}
-                          />
-
-                          <button
-                            onClick={toggleBold}
-                            className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                          >
-                            Bold
-                          </button>
-                          <button
-                            onClick={toggleItalic}
-                            className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                          >
-                            Italic
-                          </button>
-                          <button
-                            onClick={toggleUnderline}
-                            className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                          >
-                            Underline
-                          </button>
-                          <button
-                            onClick={toggleTextTransform}
-                            className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                          >
-                            Uppercase
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    {[
+                      ["Thanks a Bunch", "Monoton"],
+                      ["Hello Stylish", "Lobster"],
+                      ["Elegant Text", "Pacifico"],
+                      ["Elegant Title", "Playfair Display"],
+                      ["Simple Body", "Poppins"],
+                      ["Plain Text", "Roboto"],
+                      ["Beautiful!", "Dancing Script,cursive"],
+                      ["BIRTHDAY BASH", "Anton"],
+                    ].map(([text, font]) => (
+                      <button
+                        key={font}
+                        onClick={async () => {
+                          await document.fonts.load("16px '" + font.split(",")[0] + "'");
+                          addText(text, font);
+                        }}
+                        className="border rounded bg-purple-600 text-white hover:bg-purple-700 p-2"
+                      >
+                        {font}
+                      </button>
+                    ))}
                   </>
+                )}
+
+                {totalPages > 1 && (
+                  <div className="col-span-2 flex justify-between items-center mt-2">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(p - 1, 0))}
+                      disabled={currentPage === 0}
+                      className="text-sm px-3 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Prev
+                    </button>
+                    <span className="text-sm">
+                      Page {currentPage + 1} of {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages - 1))}
+                      disabled={currentPage >= totalPages - 1}
+                      className="text-sm px-3 py-1 rounded border bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+
+                {/* Text Styling Panel (Optional) */}
+                {selectedType === "text" && selectedId && (
+                  <div className="col-span-2 p-4 max-w-5xl mx-auto">
+                    <div className="flex flex-wrap gap-3 items-center border p-4 rounded-lg shadow mb-6 bg-white">
+                      <select
+                        onChange={(e) => updateTextStyle("fontFamily", e.target.value)}
+                        value={texts.find((t) => t.id === selectedId)?.fontFamily || ""}
+                        className="border p-2 rounded"
+                      >
+                        <option value="">Font</option>
+                        {fontList.map((f) => (
+                          <option key={f.name} value={f.name} style={{ fontFamily: f.style }}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="number"
+                        min={10}
+                        max={150}
+                        className="border p-2 w-24 rounded"
+                        value={texts.find((t) => t.id === selectedId)?.fontSize || 40}
+                        onChange={(e) => updateTextStyle("fontSize", parseInt(e.target.value))}
+                      />
+
+                      <input
+                        type="color"
+                        className="w-10 h-10 rounded border"
+                        value={texts.find((t) => t.id === selectedId)?.fill || "#000000"}
+                        onChange={(e) => updateTextStyle("fill", e.target.value)}
+                      />
+
+                      <button onClick={toggleBold} className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">
+                        Bold
+                      </button>
+                      <button onClick={toggleItalic} className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">
+                        Italic
+                      </button>
+                      <button onClick={toggleUnderline} className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">
+                        Underline
+                      </button>
+                      <button onClick={toggleTextTransform} className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">
+                        Uppercase
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {selectedType === "extraImage" && selectedId && (
+                  <ColorPickerListSvg
+                    selectedId={selectedId}
+                    colorKeys={selectedSvgObj?.colorKeys || []}
+                    fillTypeMap={selectedSvgObj?.fillTypeMap || {}}
+                    onColorChange={onColorChange}
+                    colorMap={selectedSvgObj?.colorMap || {}}
+                    gradientMap={selectedSvgObj?.gradientMap || {}}
+                    togglePicker={togglePicker}
+                    pickerVisibility={pickerVisibility}
+                  />
+                )}
+
+                {activeTab === "media" && (
+                  <div className="col-span-3 grid grid-cols-3 gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      style={{ display: "none" }}
+                    />
+                    <div
+                      onClick={() => fileInputRef.current.click()}
+                      className="p-6 text-black rounded-lg hover:bg-blue-700 cursor-pointer flex flex-col items-center justify-center"
+                      style={{
+                        borderColor: "#ccc",
+                        backgroundColor: "#f9f9f9",
+                        borderRadius: "0.375rem",
+                        borderWidth: "1px",
+                        borderStyle: "dashed",
+                      }}
+                    >
+                      <UploadCloud /> Upload Image
+                    </div>
+                    {uploadedImages?.map((img) => (
+                      <div
+                        key={img.id}
+                        className="border w-30 h-30 rounded-md cursor-pointer hover:border-blue-500"
+                        onClick={() => handleAddUploadedImageToCanvas(img)}
+                        title="Add to canvas"
+                      >
+                        <img
+                          src={img.url}
+                          alt="thumb"
+                          className="w-full h-full object-cover rounded"
+                          style={{ background: "#eee" }}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
@@ -503,11 +389,10 @@ const Sidebar = ({
                 <button
                   key={label}
                   onClick={() => handleAspectRatioChange(value)}
-                  className={`relative flex flex-col items-center justify-center p-2 border rounded-lg ${
-                    cropAspectRatio === value
-                      ? "border-blue-500 ring-2 ring-blue-500"
-                      : "border-gray-300"
-                  }`}
+                  className={`relative flex flex-col items-center justify-center p-2 border rounded-lg ${cropAspectRatio === value
+                    ? "border-blue-500 ring-2 ring-blue-500"
+                    : "border-gray-300"
+                    }`}
                 >
                   <div className="w-16 h-16 bg-gray-100 flex items-center justify-center overflow-hidden">
                     <img
@@ -592,6 +477,7 @@ const Sidebar = ({
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
