@@ -1,5 +1,6 @@
 "use client";
 
+import ContextRightClick from "@/Componment/ContextRightClick";
 import Sidebar from "@/Componment/Sidebar";
 import Topbar from "@/Componment/Topbar";
 import { canvasPresets } from "@/utils/canvasPresets";
@@ -93,6 +94,8 @@ export default function ImageEditor() {
   const [customHeight, setCustomHeight] = useState(750);
   const [stageWidth, setStageWidth] = useState(canvasPresets[0].width);
   const [stageHeight, setStageHeight] = useState(canvasPresets[0].height);
+  const [canvasBgColor, setCanvasBgColor] = useState("#ffffff");
+  const [appliedFilterKey, setAppliedFilterKey] = useState(null);
 
   useEffect(() => {
     if (canvasSize.label === "Custom (enter below)") {
@@ -117,14 +120,14 @@ export default function ImageEditor() {
         ...t,
         x: Math.max(0, Math.min(t.x, stageWidth - 50)),
         y: Math.max(0, Math.min(t.y, stageHeight - 50)),
-      }))
+      })),
     );
     setImages((prev) =>
       prev.map((img) => ({
         ...img,
         x: Math.max(0, Math.min(img.x, stageWidth - 50)),
         y: Math.max(0, Math.min(img.y, stageHeight - 50)),
-      }))
+      })),
     );
     setCropArea((prev) => ({
       ...prev,
@@ -154,6 +157,11 @@ export default function ImageEditor() {
         bgRemovedBlob,
         cropAspectRatio,
         lastCropData,
+        appliedFilterKey,
+        canvasSize,
+        customWidth,
+        customHeight,
+        canvasBgColor,
       },
     ]);
     setRedoStack([]);
@@ -183,6 +191,11 @@ export default function ImageEditor() {
         bgRemovedBlob,
         cropAspectRatio,
         lastCropData,
+        appliedFilterKey,
+        canvasSize,
+        customWidth,
+        customHeight,
+        canvasBgColor,
       },
     ]);
     setImages(lastState.images);
@@ -202,6 +215,11 @@ export default function ImageEditor() {
     setBgRemovedBlob(lastState.bgRemovedBlob);
     setCropAspectRatio(lastState.cropAspectRatio);
     setLastCropData(lastState.lastCropData);
+    setAppliedFilterKey(lastState.appliedFilterKey);
+    setCanvasSize(lastState.canvasSize);
+    setCustomWidth(lastState.customWidth);
+    setCustomHeight(lastState.customHeight);
+    setCanvasBgColor(lastState.canvasBgColor);
   }
 
   function handleRedo() {
@@ -228,6 +246,11 @@ export default function ImageEditor() {
         bgRemovedBlob,
         cropAspectRatio,
         lastCropData,
+        appliedFilterKey,
+        canvasSize,
+        customWidth,
+        customHeight,
+        canvasBgColor,
       },
     ]);
     setImages(nextState.images);
@@ -247,6 +270,11 @@ export default function ImageEditor() {
     setBgRemovedBlob(nextState.bgRemovedBlob);
     setCropAspectRatio(nextState.cropAspectRatio);
     setLastCropData(nextState.lastCropData);
+    setAppliedFilterKey(nextState.appliedFilterKey);
+    setCanvasSize(nextState.canvasSize);
+    setCustomWidth(nextState.customWidth);
+    setCustomHeight(nextState.customHeight);
+    setCanvasBgColor(nextState.canvasBgColor);
   }
 
   useEffect(() => {
@@ -313,7 +341,17 @@ export default function ImageEditor() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [selectedId, selectedType, images, texts, colorMap, fillTypeMap, gradientMap, showCropRect, selectedBg]);
+  }, [
+    selectedId,
+    selectedType,
+    images,
+    texts,
+    colorMap,
+    fillTypeMap,
+    gradientMap,
+    showCropRect,
+    selectedBg,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -512,12 +550,12 @@ export default function ImageEditor() {
         prev.map((i) =>
           i.id === imgObj.id
             ? {
-              ...i,
-              image: img,
-              colorMap: newColorMap,
-              fillTypeMap: newFillTypeMap,
-              gradientMap: newGradientMap,
-            }
+                ...i,
+                image: img,
+                colorMap: newColorMap,
+                fillTypeMap: newFillTypeMap,
+                gradientMap: newGradientMap,
+              }
             : i,
         ),
       );
@@ -539,9 +577,9 @@ export default function ImageEditor() {
         };
         const newGradientMap = isGradient
           ? {
-            ...img.gradientMap,
-            [origColor]: { start: newColor.start, end: newColor.end },
-          }
+              ...img.gradientMap,
+              [origColor]: { start: newColor.start, end: newColor.end },
+            }
           : img.gradientMap;
 
         updateImageColors(img, updatedMap, newFillTypes, newGradientMap);
@@ -730,9 +768,26 @@ export default function ImageEditor() {
     setEditingTextId(null);
   };
 
+  useEffect(() => {
+    const imageNode = shapeRefs.current["main-image"];
+    if (!imageNode || !imageObj || !appliedFilterKey) return;
+    const filter = filterStyles[appliedFilterKey];
+    if (!filter) return;
+
+    imageNode.filters(filter.filters || []);
+    const adjustableProps = ["brightness", "contrast", "hue", "saturation", "value"];
+    adjustableProps.forEach((prop) => {
+      imageNode[prop](filter[prop] !== undefined ? filter[prop] : 0);
+    });
+    imageNode.cache();
+    imageNode.getLayer().batchDraw();
+  }, [appliedFilterKey, imageObj, shapeRefs.current["main-image"]]);
+
   const applyFilter = (filterKey) => {
     pushUndoState();
-    const imageNode = imageNodeRef.current;
+    setAppliedFilterKey(filterKey);
+    // const imageNode = imageNodeRef.current;
+    const imageNode = shapeRefs.current["main-image"];
     const filter = filterStyles[filterKey];
 
     if (imageNode && imageObj) {
@@ -752,7 +807,6 @@ export default function ImageEditor() {
     pushUndoState();
     const file = e.target.files[0];
     if (file && file.type.startsWith("image/")) {
-
       const url = URL.createObjectURL(file);
       setUploadedImages((prev) => [...prev, { file, url, id: Date.now().toString() }]);
       if (imageFile === null) {
@@ -1218,15 +1272,21 @@ export default function ImageEditor() {
   };
 
   function handleContextMenuDuplicate() {
-    const item = layerList.find(l => l.id === contextMenu.layerId);
+    const item = layerList.find((l) => l.id === contextMenu.layerId);
     if (!item) return;
     pushUndoState();
     if (item.type === "text") {
-      const newText = { ...item, id: Date.now().toString(), x: item.x + 20, y: item.y + 20, label: "Text (copy)" };
-      setTexts(prev => [...prev, newText]);
+      const newText = {
+        ...item,
+        id: Date.now().toString(),
+        x: item.x + 20,
+        y: item.y + 20,
+        label: "Text (copy)",
+      };
+      setTexts((prev) => [...prev, newText]);
     } else if (item.type === "extraImage" || item.type === "mainImage") {
       // Duplicate image (main or extra)
-      const imgObj = images.find(img => img.id === item.id) || {
+      const imgObj = images.find((img) => img.id === item.id) || {
         id: "main-image",
         image: imageObj,
         x: imageProps.x,
@@ -1238,24 +1298,24 @@ export default function ImageEditor() {
         rotation: imageProps.rotation,
         url: imageObj?.src,
         label: "Image",
-        type: "mainImage"
+        type: "mainImage",
       };
       const newId = Date.now().toString();
-      setImages(prev => [
+      setImages((prev) => [
         ...prev,
         {
           ...imgObj,
           id: newId,
           x: imgObj.x + 20,
           y: imgObj.y + 20,
-          label: (imgObj.label || "Image") + " (copy)"
-        }
+          label: (imgObj.label || "Image") + " (copy)",
+        },
       ]);
     }
   }
 
   function handleContextMenuCopy() {
-    const item = layerList.find(l => l.id === contextMenu.layerId);
+    const item = layerList.find((l) => l.id === contextMenu.layerId);
     if (!item) return;
     setClipboard({ ...item });
   }
@@ -1264,11 +1324,17 @@ export default function ImageEditor() {
     if (!clipboard) return;
     pushUndoState();
     if (clipboard.type === "text") {
-      const newText = { ...clipboard, id: Date.now().toString(), x: clipboard.x + 30, y: clipboard.y + 30, label: "Text (copy)" };
-      setTexts(prev => [...prev, newText]);
+      const newText = {
+        ...clipboard,
+        id: Date.now().toString(),
+        x: clipboard.x + 30,
+        y: clipboard.y + 30,
+        label: "Text (copy)",
+      };
+      setTexts((prev) => [...prev, newText]);
     } else if (clipboard.type === "extraImage" || clipboard.type === "mainImage") {
       // Paste image (main or extra)
-      const imgObj = images.find(img => img.id === clipboard.id) || {
+      const imgObj = images.find((img) => img.id === clipboard.id) || {
         id: "main-image",
         image: imageObj,
         x: imageProps.x,
@@ -1280,93 +1346,89 @@ export default function ImageEditor() {
         rotation: imageProps.rotation,
         url: imageObj?.src,
         label: "Image",
-        type: "mainImage"
+        type: "mainImage",
       };
       const newId = Date.now().toString();
-      setImages(prev => [
+      setImages((prev) => [
         ...prev,
         {
           ...imgObj,
           id: newId,
           x: imgObj.x + 30,
           y: imgObj.y + 30,
-          label: (imgObj.label || "Image") + " (copy)"
-        }
+          label: (imgObj.label || "Image") + " (copy)",
+        },
       ]);
     }
   }
 
   function handleContextMenuLock() {
-    setLockedLayers(prev => ({
+    setLockedLayers((prev) => ({
       ...prev,
-      [contextMenu.layerId]: !prev[contextMenu.layerId]
+      [contextMenu.layerId]: !prev[contextMenu.layerId],
     }));
     setContextMenu({ ...contextMenu, visible: false });
   }
 
   function handleContextMenuFlip(horizontal = true) {
-    const item = layerList.find(l => l.id === contextMenu.layerId);
+    const item = layerList.find((l) => l.id === contextMenu.layerId);
     if (!item) return;
     pushUndoState();
     if (item.type === "text") {
-      setTexts(prev =>
-        prev.map(t =>
+      setTexts((prev) =>
+        prev.map((t) =>
           t.id === item.id
             ? {
-              ...t,
-              scaleX: horizontal ? (t.scaleX ? -t.scaleX : -1) : t.scaleX || 1,
-              scaleY: !horizontal ? (t.scaleY ? -t.scaleY : -1) : t.scaleY || 1
-            }
-            : t
-        )
+                ...t,
+                scaleX: horizontal ? (t.scaleX ? -t.scaleX : -1) : t.scaleX || 1,
+                scaleY: !horizontal ? (t.scaleY ? -t.scaleY : -1) : t.scaleY || 1,
+              }
+            : t,
+        ),
       );
     } else if (item.type === "extraImage") {
-      setImages(prev =>
-        prev.map(img =>
+      setImages((prev) =>
+        prev.map((img) =>
           img.id === item.id
             ? {
-              ...img,
-              scaleX: horizontal ? (img.scaleX ? -img.scaleX : -1) : img.scaleX || 1,
-              scaleY: !horizontal ? (img.scaleY ? -img.scaleY : -1) : img.scaleY || 1
-            }
-            : img
-        )
+                ...img,
+                scaleX: horizontal ? (img.scaleX ? -img.scaleX : -1) : img.scaleX || 1,
+                scaleY: !horizontal ? (img.scaleY ? -img.scaleY : -1) : img.scaleY || 1,
+              }
+            : img,
+        ),
       );
     } else if (item.type === "mainImage") {
-      setImageProps(prev => ({
+      setImageProps((prev) => ({
         ...prev,
         scaleX: horizontal ? (prev.scaleX ? -prev.scaleX : -1) : prev.scaleX || 1,
-        scaleY: !horizontal ? (prev.scaleY ? -prev.scaleY : -1) : prev.scaleY || 1
+        scaleY: !horizontal ? (prev.scaleY ? -prev.scaleY : -1) : prev.scaleY || 1,
       }));
     }
     setContextMenu({ ...contextMenu, visible: false });
   }
 
   function handleContextMenuRotate(direction = "left") {
-    const item = layerList.find(l => l.id === contextMenu.layerId);
+    const item = layerList.find((l) => l.id === contextMenu.layerId);
     if (!item) return;
     pushUndoState();
     const delta = direction === "left" ? -90 : 90;
     if (item.type === "text") {
-      setTexts(prev =>
-        prev.map(t =>
-          t.id === item.id
-            ? { ...t, rotation: ((t.rotation || 0) + delta) % 360 }
-            : t
-        )
+      setTexts((prev) =>
+        prev.map((t) =>
+          t.id === item.id ? { ...t, rotation: ((t.rotation || 0) + delta) % 360 } : t,
+        ),
       );
     } else if (item.type === "extraImage") {
-      setImages(prev =>
-        prev.map(img =>
-          img.id === item.id
-            ? { ...img, rotation: ((img.rotation || 0) + delta) % 360 }
-            : img
-        )
+      setImages((prev) =>
+        prev.map((img) =>
+          img.id === item.id ? { ...img, rotation: ((img.rotation || 0) + delta) % 360 } : img,
+        ),
       );
     } else if (item.type === "mainImage") {
-      setImageProps(prev => ({
+      setImageProps((prev) => ({
         ...prev,
-        rotation: ((prev.rotation || 0) + delta) % 360
+        rotation: ((prev.rotation || 0) + delta) % 360,
       }));
     }
     setContextMenu({ ...contextMenu, visible: false });
@@ -1391,6 +1453,7 @@ export default function ImageEditor() {
         <select
           value={canvasSize.label}
           onChange={(e) => {
+            pushUndoState();
             const preset = canvasPresets.find((p) => p.label === e.target.value);
             setCanvasSize(preset);
           }}
@@ -1408,7 +1471,10 @@ export default function ImageEditor() {
               type="number"
               min={1}
               value={customWidth}
-              onChange={(e) => setCustomWidth(Number(e.target.value))}
+              onChange={(e) => {
+                pushUndoState();
+                setCustomWidth(Number(e.target.value));
+              }}
               className="border rounded px-2 py-1 w-20"
               placeholder="Width"
             />
@@ -1417,7 +1483,10 @@ export default function ImageEditor() {
               type="number"
               min={1}
               value={customHeight}
-              onChange={(e) => setCustomHeight(Number(e.target.value))}
+              onChange={(e) => {
+                pushUndoState();
+                setCustomHeight(Number(e.target.value));
+              }}
               className="border rounded px-2 py-1 w-20"
               placeholder="Height"
             />
@@ -1426,6 +1495,17 @@ export default function ImageEditor() {
         <span className="text-gray-500 ml-2">
           ({stageWidth} x {stageHeight})
         </span>
+        <label className="ml-4 font-semibold">Canvas Color:</label>
+        <input
+          type="color"
+          value={canvasBgColor}
+          onChange={(e) => {
+            pushUndoState();
+            setCanvasBgColor(e.target.value);
+          }}
+          className="w-8 h-8 border rounded"
+          title="Pick canvas background color"
+        />
       </div>
       <Sidebar
         replaceBgOpen={replaceBgOpen}
@@ -1458,11 +1538,7 @@ export default function ImageEditor() {
         toggleItalic={toggleItalic}
         toggleUnderline={toggleUnderline}
         toggleTextTransform={toggleTextTransform}
-        colorKeys={colorKeys}
-        fillTypeMap={fillTypeMap}
         onColorChange={onColorChange}
-        colorMap={colorMap}
-        gradientMap={gradientMap}
         togglePicker={togglePicker}
         pickerVisibility={pickerVisibility}
         selectedSvgObj={selectedSvgObj}
@@ -1493,99 +1569,43 @@ export default function ImageEditor() {
           stageHeight={stageHeight}
           stageWidth={stageWidth}
           setOpenColorFilter={setOpenColorFilter}
-
         />
 
         {contextMenu.visible && (
-          <div
-            style={{
-              position: "fixed",
-              top: contextMenu.y,
-              left: contextMenu.x,
-              zIndex: 2000,
-              background: "white",
-              border: "1px solid #ccc",
-              borderRadius: 4,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-              minWidth: 180,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-blue-100"
-              onClick={() => {
-                handleContextMenuDuplicate();
-                setContextMenu({ ...contextMenu, visible: false });
-              }}
-            >
-              Duplicate
-            </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-blue-100"
-              onClick={() => {
-                handleContextMenuCopy();
-                setContextMenu({ ...contextMenu, visible: false });
-              }}
-            >
-              Copy
-            </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-blue-100"
-              onClick={handleContextMenuLock}
-            >
-              {lockedLayers[contextMenu.layerId] ? "Unlock" : "Lock"}
-            </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-blue-100"
-              onClick={() => handleContextMenuFlip(true)}
-            >
-              Flip Horizontally
-            </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-blue-100"
-              onClick={() => handleContextMenuFlip(false)}
-            >
-              Flip Vertically
-            </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-blue-100"
-              onClick={() => handleContextMenuRotate("left")}
-            >
-              Rotate Left
-            </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-blue-100"
-              onClick={() => handleContextMenuRotate("right")}
-            >
-              Rotate Right
-            </button>
-            <button
-              className="w-full text-left px-4 py-2 hover:bg-red-100 text-red-600"
-              onClick={handleContextMenuDelete}
-            >
-              Delete Layer
-            </button>
-          </div>
+          <ContextRightClick
+            contextMenu={contextMenu}
+            handleContextMenuDuplicate={handleContextMenuDuplicate}
+            setContextMenu={setContextMenu}
+            handleContextMenuCopy={handleContextMenuCopy}
+            handleContextMenuLock={handleContextMenuLock}
+            lockedLayers={lockedLayers}
+            handleContextMenuFlip={handleContextMenuFlip}
+            handleContextMenuRotate={handleContextMenuRotate}
+            handleContextMenuDelete={handleContextMenuDelete}
+          />
         )}
 
-        <div
-          style={{
-            border: "2px solid #ccc",
-            borderRadius: 8,
-            width: stageWidth,
-            height: stageHeight,
-            backgroundColor: "#fff",
-          }}
-        >
+        <div>
           <Stage
             width={stageWidth}
             height={stageHeight}
             onMouseDown={handleStageClick}
             onTouchStart={handleStageClick}
-            style={{ cursor: selected && !showCropRect ? "move" : "default" }}
+            style={{
+              cursor: selected && !showCropRect ? "move" : "default",
+              backgroundColor: canvasBgColor,
+            }}
             ref={stageRef}
           >
             <Layer>
+              <Rect
+                x={0}
+                y={0}
+                width={stageWidth}
+                height={stageHeight}
+                fill={canvasBgColor}
+                listening={false}
+              />
               {selectedBg && (
                 <KonvaImage
                   image={selectedBg}
@@ -1617,8 +1637,8 @@ export default function ImageEditor() {
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
-                      { id: "main-image", type: "mainImage" }
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
+                      { id: "main-image", type: "mainImage" },
                     );
                   }}
                   onTransformEnd={(e) => {
@@ -1660,8 +1680,8 @@ export default function ImageEditor() {
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
-                      { id: "crop-rect", type: "crop" }
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
+                      { id: "crop-rect", type: "crop" },
                     );
                   }}
                   onTransformEnd={(e) => {
@@ -1704,8 +1724,8 @@ export default function ImageEditor() {
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
-                      { id: text.id, type: "text" }
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
+                      { id: text.id, type: "text" },
                     );
                   }}
                   onDblTap={() => handleDblClick(text.id)}
@@ -1733,8 +1753,8 @@ export default function ImageEditor() {
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
-                      { id, type: "extraImage" }
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
+                      { id, type: "extraImage" },
                     );
                   }}
                   onDragEnd={(e) => {
@@ -1751,7 +1771,16 @@ export default function ImageEditor() {
               <Transformer
                 ref={transformerRef}
                 rotateEnabled={selectedType !== "crop"}
-                enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]}
+                enabledAnchors={[
+                  "top-left",
+                  "top-center",
+                  "top-right",
+                  "middle-left",
+                  "middle-right",
+                  "bottom-left",
+                  "bottom-center",
+                  "bottom-right",
+                ]}
                 boundBoxFunc={(oldBox, newBox) => {
                   if (newBox.width < 30 || newBox.height < 30) return oldBox;
                   return newBox;
@@ -1797,7 +1826,9 @@ export default function ImageEditor() {
                             ref={provided.innerRef}
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
-                            className={`p-2 mb-2 bg-gray-100 rounded shadow-sm flex items-center justify-center gap-2 hover:bg-gray-200 cursor-pointer ${selectedId === item.id ? "bg-blue-100" : ""}`}
+                            className={`p-2 mb-2 bg-gray-100 rounded shadow-sm flex items-center justify-center gap-2 hover:bg-gray-200 cursor-pointer ${
+                              selectedId === item.id ? "bg-blue-100" : ""
+                            }`}
                             onClick={() => handleSelect(item.id, item.type)}
                             onContextMenu={(e) => handleLayerRightClick(e, item)}
                           >

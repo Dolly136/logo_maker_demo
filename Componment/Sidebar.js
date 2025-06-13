@@ -5,7 +5,7 @@ import { SVG_SHAPE_LIST } from "@/utils/svg_shape_list";
 import { aspectRatios } from "@/utils/servicesFunction";
 import { fontList } from "@/utils/fontList";
 import ColorPickerListSvg from "./ColorPickerListSvg";
-import { UploadCloud } from "lucide-react";
+import { UploadCloud, X } from "lucide-react";
 
 const ITEMS_PER_PAGE = 4;
 
@@ -40,29 +40,20 @@ const Sidebar = ({
   toggleItalic,
   toggleUnderline,
   toggleTextTransform,
-  colorKeys,
-  fillTypeMap,
   onColorChange,
-  colorMap,
-  gradientMap,
   togglePicker,
   pickerVisibility,
   selectedSvgObj,
   handleAddUploadedImageToCanvas,
   uploadedImages,
   handleFileChange,
-  fileInputRef
+  fileInputRef,
 }) => {
   const [activeTab, setActiveTab] = useState("shapes");
   const [currentPage, setCurrentPage] = useState(0);
 
   const getPaginatedItems = () => {
-    const list =
-      activeTab === "shapes"
-        ? SVG_SHAPE_LIST
-        : activeTab === "icons"
-          ? SVG_LIST
-          : [];
+    const list = activeTab === "shapes" ? SVG_SHAPE_LIST : activeTab === "icons" ? SVG_LIST : [];
 
     const start = currentPage * ITEMS_PER_PAGE;
     return list.slice(start, start + ITEMS_PER_PAGE);
@@ -72,12 +63,12 @@ const Sidebar = ({
     activeTab === "texts"
       ? 1
       : Math.ceil(
-        (activeTab === "shapes"
-          ? SVG_SHAPE_LIST.length
-          : activeTab === "icons"
+          (activeTab === "shapes"
+            ? SVG_SHAPE_LIST.length
+            : activeTab === "icons"
             ? SVG_LIST.length
-            : 0) / ITEMS_PER_PAGE
-      );
+            : 0) / ITEMS_PER_PAGE,
+        );
 
   const getAspectClass = (value) => {
     if (value === 1) return "aspect-square";
@@ -131,8 +122,9 @@ const Sidebar = ({
                   height={100}
                   width={100}
                   alt={`bg-${index}`}
-                  className={`cursor-pointer border-4 rounded-md ${selected === obj?.img ? "border-blue-500" : "border-transparent"
-                    }`}
+                  className={`cursor-pointer border-4 rounded-md ${
+                    selected === obj?.img ? "border-blue-500" : "border-transparent"
+                  }`}
                   onClick={() => {
                     const img = new window.Image();
                     img.src = obj?.img;
@@ -160,49 +152,63 @@ const Sidebar = ({
         )}
 
         {openColorFilter === "color_filter" && (
-          <div className="h-[1000px] overflow-auto grid grid-cols-2 md:grid-cols-1 lg:grid-cols-2 gap-4 p-6 bg-white">
-            {Object.keys(filterStyles).map((filterKey, i) => (
-              <button
-                key={i}
-                className="bg-black text-black p-2 rounded-md border-black "
-                onClick={() => applyFilter(filterKey)}
-              >
-                {filterKey.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-              </button>
-            ))}
+          <div className="h-[1000px] overflow-hidden border-r pr-4 bg-white">
+            <div className="flex items-center justify-between p-4 border-b ">
+              <h2 className="text-xl font-bold mb-4">Color filter</h2>
+              <X className="cursor-pointer" onClick={() => setOpenColorFilter("")} />
+            </div>
+            <div className="h-[1000px] overflow-auto grid grid-cols-2 md:grid-cols-1 lg:grid-cols-2 gap-4 p-6 ">
+              {Object.keys(filterStyles).map((filterKey, i) => (
+                <button
+                  key={i}
+                  className="bg-black text-black p-2 rounded-md border-black hover:bg-gray-200 hover:text-black transition-colors duration-300"
+                  style={{ backgroundColor: filterStyles[filterKey].color }}
+                  onClick={() => applyFilter(filterKey)}
+                >
+                  {filterKey.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
         {openColorFilter === "add_element" && (
           <div className="h-[1000px] overflow-hidden border-r pr-4 bg-white">
-            <h2 className="text-xl font-bold mb-4">SVG Library</h2>
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-bold mb-4">SVG Library</h2>
+              <X className="cursor-pointer" onClick={() => setOpenColorFilter("")} />
+            </div>
 
             <div className="flex space-x-4 mb-4">
               <button
                 onClick={() => setActiveTab("icons")}
-                className={`px-4 py-2 rounded ${activeTab === "icons" ? "bg-blue-600 text-white" : "bg-gray-200"
-                  }`}
+                className={`px-4 py-2 rounded ${
+                  activeTab === "icons" ? "bg-blue-600 text-white" : "bg-gray-200"
+                }`}
               >
                 Icons
               </button>
               <button
                 onClick={() => setActiveTab("shapes")}
-                className={`px-4 py-2 rounded ${activeTab === "shapes" ? "bg-blue-600 text-white" : "bg-gray-200"
-                  }`}
+                className={`px-4 py-2 rounded ${
+                  activeTab === "shapes" ? "bg-blue-600 text-white" : "bg-gray-200"
+                }`}
               >
                 Shapes
               </button>
               <button
                 onClick={() => setActiveTab("texts")}
-                className={`px-4 py-2 rounded ${activeTab === "texts" ? "bg-blue-600 text-white" : "bg-gray-200"
-                  }`}
+                className={`px-4 py-2 rounded ${
+                  activeTab === "texts" ? "bg-blue-600 text-white" : "bg-gray-200"
+                }`}
               >
                 Add Text
               </button>
               <button
                 onClick={() => setActiveTab("media")}
-                className={`px-4 py-2 rounded ${activeTab === "media" ? "bg-blue-600 text-white" : "bg-gray-200"
-                  }`}
+                className={`px-4 py-2 rounded ${
+                  activeTab === "media" ? "bg-blue-600 text-white" : "bg-gray-200"
+                }`}
               >
                 Uploaded Media
               </button>
@@ -309,16 +315,28 @@ const Sidebar = ({
                         onChange={(e) => updateTextStyle("fill", e.target.value)}
                       />
 
-                      <button onClick={toggleBold} className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">
+                      <button
+                        onClick={toggleBold}
+                        className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                      >
                         Bold
                       </button>
-                      <button onClick={toggleItalic} className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">
+                      <button
+                        onClick={toggleItalic}
+                        className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                      >
                         Italic
                       </button>
-                      <button onClick={toggleUnderline} className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">
+                      <button
+                        onClick={toggleUnderline}
+                        className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                      >
                         Underline
                       </button>
-                      <button onClick={toggleTextTransform} className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">
+                      <button
+                        onClick={toggleTextTransform}
+                        className="border px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                      >
                         Uppercase
                       </button>
                     </div>
@@ -389,10 +407,11 @@ const Sidebar = ({
                 <button
                   key={label}
                   onClick={() => handleAspectRatioChange(value)}
-                  className={`relative flex flex-col items-center justify-center p-2 border rounded-lg ${cropAspectRatio === value
-                    ? "border-blue-500 ring-2 ring-blue-500"
-                    : "border-gray-300"
-                    }`}
+                  className={`relative flex flex-col items-center justify-center p-2 border rounded-lg ${
+                    cropAspectRatio === value
+                      ? "border-blue-500 ring-2 ring-blue-500"
+                      : "border-gray-300"
+                  }`}
                 >
                   <div className="w-16 h-16 bg-gray-100 flex items-center justify-center overflow-hidden">
                     <img
@@ -477,7 +496,6 @@ const Sidebar = ({
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
