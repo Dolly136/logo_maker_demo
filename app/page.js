@@ -108,6 +108,267 @@ export default function ImageEditor() {
   }, [canvasSize, customWidth, customHeight]);
 
   useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Only trigger if a layer is selected
+      if (!selectedId || !selectedType) return;
+
+      // Copy (Ctrl+C)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        const item = layerList.find((l) => l.id === selectedId);
+        if (item) setClipboard({ ...item });
+      }
+
+      // Duplicate (Ctrl+D)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        const item = layerList.find((l) => l.id === selectedId);
+        if (!item) return;
+        // Duplicate logic (same as handleContextMenuDuplicate)
+        if (item.type === "text") {
+          const newText = {
+            ...item,
+            id: Date.now().toString(),
+            x: item.x + 20,
+            y: item.y + 20,
+            label: "Text (copy)",
+          };
+          setTexts((prev) => [...prev, newText]);
+        } else if (item.type === "extraImage" || item.type === "mainImage") {
+          const imgObj = images.find((img) => img.id === item.id) || {
+            id: "main-image",
+            image: imageObj,
+            x: imageProps.x,
+            y: imageProps.y,
+            width: imageProps.width,
+            height: imageProps.height,
+            scaleX: imageProps.scaleX,
+            scaleY: imageProps.scaleY,
+            rotation: imageProps.rotation,
+            url: imageObj?.src,
+            label: "Image",
+            type: "mainImage",
+          };
+          const newId = Date.now().toString();
+          setImages((prev) => [
+            ...prev,
+            {
+              ...imgObj,
+              id: newId,
+              x: imgObj.x + 20,
+              y: imgObj.y + 20,
+              label: (imgObj.label || "Image") + " (copy)",
+            },
+          ]);
+        }
+      }
+
+      // Delete (Delete key)
+      if (e.key === "Delete") {
+        e.preventDefault();
+        deleteSelectedLayer();
+      }
+
+      // Lock/Unlock (Ctrl+L)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        setLockedLayers((prev) => ({
+          ...prev,
+          [selectedId]: !prev[selectedId],
+        }));
+      }
+
+      // Flip Horizontal (Ctrl+F)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        const item = layerList.find((l) => l.id === selectedId);
+        if (!item) return;
+        if (item.type === "text") {
+          setTexts((prev) =>
+            prev.map((t) =>
+              t.id === item.id
+                ? {
+                  ...t,
+                  scaleX: t.scaleX ? -t.scaleX : -1,
+                }
+                : t,
+            ),
+          );
+        } else if (item.type === "extraImage") {
+          setImages((prev) =>
+            prev.map((img) =>
+              img.id === item.id
+                ? {
+                  ...img,
+                  scaleX: img.scaleX ? -img.scaleX : -1,
+                }
+                : img,
+            ),
+          );
+        } else if (item.type === "mainImage") {
+          setImageProps((prev) => ({
+            ...prev,
+            scaleX: prev.scaleX ? -prev.scaleX : -1,
+          }));
+        }
+      }
+
+      // Flip Vertical (Ctrl+Shift+F)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        const item = layerList.find((l) => l.id === selectedId);
+        if (!item) return;
+        if (item.type === "text") {
+          setTexts((prev) =>
+            prev.map((t) =>
+              t.id === item.id
+                ? {
+                  ...t,
+                  scaleY: t.scaleY ? -t.scaleY : -1,
+                }
+                : t,
+            ),
+          );
+        } else if (item.type === "extraImage") {
+          setImages((prev) =>
+            prev.map((img) =>
+              img.id === item.id
+                ? {
+                  ...img,
+                  scaleY: img.scaleY ? -img.scaleY : -1,
+                }
+                : img,
+            ),
+          );
+        } else if (item.type === "mainImage") {
+          setImageProps((prev) => ({
+            ...prev,
+            scaleY: prev.scaleY ? -prev.scaleY : -1,
+          }));
+        }
+      }
+
+      // Rotate Right (Ctrl+R)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        const item = layerList.find((l) => l.id === selectedId);
+        if (!item) return;
+        const delta = 90;
+        if (item.type === "text") {
+          setTexts((prev) =>
+            prev.map((t) =>
+              t.id === item.id ? { ...t, rotation: ((t.rotation || 0) + delta) % 360 } : t,
+            ),
+          );
+        } else if (item.type === "extraImage") {
+          setImages((prev) =>
+            prev.map((img) =>
+              img.id === item.id ? { ...img, rotation: ((img.rotation || 0) + delta) % 360 } : img,
+            ),
+          );
+        } else if (item.type === "mainImage") {
+          setImageProps((prev) => ({
+            ...prev,
+            rotation: ((prev.rotation || 0) + delta) % 360,
+          }));
+        }
+      }
+
+      // Rotate Left (Ctrl+Shift+R)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        const item = layerList.find((l) => l.id === selectedId);
+        if (!item) return;
+        const delta = -90;
+        if (item.type === "text") {
+          setTexts((prev) =>
+            prev.map((t) =>
+              t.id === item.id ? { ...t, rotation: ((t.rotation || 0) + delta + 360) % 360 } : t,
+            ),
+          );
+        } else if (item.type === "extraImage") {
+          setImages((prev) =>
+            prev.map((img) =>
+              img.id === item.id
+                ? { ...img, rotation: ((img.rotation || 0) + delta + 360) % 360 }
+                : img,
+            ),
+          );
+        } else if (item.type === "mainImage") {
+          setImageProps((prev) => ({
+            ...prev,
+            rotation: ((prev.rotation || 0) + delta + 360) % 360,
+          }));
+        }
+      }
+      
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowUp") {
+        e.preventDefault();
+        bringLayerForward();
+      }
+  
+      // Send Backward (Ctrl+Shift+Down)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown") {
+        e.preventDefault();
+        sendLayerBackward();
+      }
+    };
+
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    selectedId,
+    selectedType,
+    layerList,
+    images,
+    texts,
+    imageObj,
+    imageProps,
+    setClipboard,
+    setTexts,
+    setImages,
+    setImageProps,
+    setLockedLayers,
+  ]);
+
+  // ...existing code...
+
+  useEffect(() => {
+    // Move Konva nodes to match layerList order
+    layerList.forEach((item) => {
+      const node = shapeRefs.current[item.id];
+      if (node) node.moveToTop();
+    });
+    stageRef.current?.batchDraw();
+  }, [layerList]);
+  // ...existing code...
+
+  function bringLayerForward() {
+    if (!selectedId) return;
+    setLayerList((prev) => {
+      const idx = prev.findIndex((l) => l.id === selectedId);
+      if (idx === -1 || idx === prev.length - 1) return prev;
+      const newList = [...prev];
+      [newList[idx], newList[idx + 1]] = [newList[idx + 1], newList[idx]];
+      return newList;
+    });
+  }
+
+  function sendLayerBackward() {
+    if (!selectedId) return;
+    setLayerList((prev) => {
+      const idx = prev.findIndex((l) => l.id === selectedId);
+      if (idx <= 0) return prev;
+      const newList = [...prev];
+      [newList[idx], newList[idx - 1]] = [newList[idx - 1], newList[idx]];
+      return newList;
+    });
+  }
+
+  // ...existing code...
+
+  useEffect(() => {
     if (imageObj) {
       setImageProps((prev) => ({
         ...prev,
@@ -550,12 +811,12 @@ export default function ImageEditor() {
         prev.map((i) =>
           i.id === imgObj.id
             ? {
-                ...i,
-                image: img,
-                colorMap: newColorMap,
-                fillTypeMap: newFillTypeMap,
-                gradientMap: newGradientMap,
-              }
+              ...i,
+              image: img,
+              colorMap: newColorMap,
+              fillTypeMap: newFillTypeMap,
+              gradientMap: newGradientMap,
+            }
             : i,
         ),
       );
@@ -577,9 +838,9 @@ export default function ImageEditor() {
         };
         const newGradientMap = isGradient
           ? {
-              ...img.gradientMap,
-              [origColor]: { start: newColor.start, end: newColor.end },
-            }
+            ...img.gradientMap,
+            [origColor]: { start: newColor.start, end: newColor.end },
+          }
           : img.gradientMap;
 
         updateImageColors(img, updatedMap, newFillTypes, newGradientMap);
@@ -1379,10 +1640,10 @@ export default function ImageEditor() {
         prev.map((t) =>
           t.id === item.id
             ? {
-                ...t,
-                scaleX: horizontal ? (t.scaleX ? -t.scaleX : -1) : t.scaleX || 1,
-                scaleY: !horizontal ? (t.scaleY ? -t.scaleY : -1) : t.scaleY || 1,
-              }
+              ...t,
+              scaleX: horizontal ? (t.scaleX ? -t.scaleX : -1) : t.scaleX || 1,
+              scaleY: !horizontal ? (t.scaleY ? -t.scaleY : -1) : t.scaleY || 1,
+            }
             : t,
         ),
       );
@@ -1391,10 +1652,10 @@ export default function ImageEditor() {
         prev.map((img) =>
           img.id === item.id
             ? {
-                ...img,
-                scaleX: horizontal ? (img.scaleX ? -img.scaleX : -1) : img.scaleX || 1,
-                scaleY: !horizontal ? (img.scaleY ? -img.scaleY : -1) : img.scaleY || 1,
-              }
+              ...img,
+              scaleX: horizontal ? (img.scaleX ? -img.scaleX : -1) : img.scaleX || 1,
+              scaleY: !horizontal ? (img.scaleY ? -img.scaleY : -1) : img.scaleY || 1,
+            }
             : img,
         ),
       );
@@ -1569,6 +1830,7 @@ export default function ImageEditor() {
           stageHeight={stageHeight}
           stageWidth={stageWidth}
           setOpenColorFilter={setOpenColorFilter}
+
         />
 
         {contextMenu.visible && (
@@ -1582,6 +1844,8 @@ export default function ImageEditor() {
             handleContextMenuFlip={handleContextMenuFlip}
             handleContextMenuRotate={handleContextMenuRotate}
             handleContextMenuDelete={handleContextMenuDelete}
+            bringLayerForward={bringLayerForward}
+            sendLayerBackward={sendLayerBackward}
           />
         )}
 
@@ -1637,7 +1901,7 @@ export default function ImageEditor() {
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
                       { id: "main-image", type: "mainImage" },
                     );
                   }}
@@ -1680,7 +1944,7 @@ export default function ImageEditor() {
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
                       { id: "crop-rect", type: "crop" },
                     );
                   }}
@@ -1724,7 +1988,7 @@ export default function ImageEditor() {
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
                       { id: text.id, type: "text" },
                     );
                   }}
@@ -1753,7 +2017,7 @@ export default function ImageEditor() {
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
                       { id, type: "extraImage" },
                     );
                   }}
@@ -1826,9 +2090,8 @@ export default function ImageEditor() {
                             ref={provided.innerRef}
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
-                            className={`p-2 mb-2 bg-gray-100 rounded shadow-sm flex items-center justify-center gap-2 hover:bg-gray-200 cursor-pointer ${
-                              selectedId === item.id ? "bg-blue-100" : ""
-                            }`}
+                            className={`p-2 mb-2 bg-gray-100 rounded shadow-sm flex items-center justify-center gap-2 hover:bg-gray-200 cursor-pointer ${selectedId === item.id ? "bg-blue-100" : ""
+                              }`}
                             onClick={() => handleSelect(item.id, item.type)}
                             onContextMenu={(e) => handleLayerRightClick(e, item)}
                           >
