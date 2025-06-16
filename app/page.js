@@ -109,22 +109,18 @@ export default function ImageEditor() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Only trigger if a layer is selected
       if (!selectedId || !selectedType) return;
 
-      // Copy (Ctrl+C)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
         e.preventDefault();
         const item = layerList.find((l) => l.id === selectedId);
         if (item) setClipboard({ ...item });
       }
 
-      // Duplicate (Ctrl+D)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
         e.preventDefault();
         const item = layerList.find((l) => l.id === selectedId);
         if (!item) return;
-        // Duplicate logic (same as handleContextMenuDuplicate)
         if (item.type === "text") {
           const newText = {
             ...item,
@@ -163,13 +159,11 @@ export default function ImageEditor() {
         }
       }
 
-      // Delete (Delete key)
       if (e.key === "Delete") {
         e.preventDefault();
         deleteSelectedLayer();
       }
 
-      // Lock/Unlock (Ctrl+L)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "l") {
         e.preventDefault();
         setLockedLayers((prev) => ({
@@ -178,7 +172,6 @@ export default function ImageEditor() {
         }));
       }
 
-      // Flip Horizontal (Ctrl+F)
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
         const item = layerList.find((l) => l.id === selectedId);
@@ -213,7 +206,6 @@ export default function ImageEditor() {
         }
       }
 
-      // Flip Vertical (Ctrl+Shift+F)
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
         const item = layerList.find((l) => l.id === selectedId);
@@ -248,7 +240,6 @@ export default function ImageEditor() {
         }
       }
 
-      // Rotate Right (Ctrl+R)
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "r") {
         e.preventDefault();
         const item = layerList.find((l) => l.id === selectedId);
@@ -270,11 +261,10 @@ export default function ImageEditor() {
           setImageProps((prev) => ({
             ...prev,
             rotation: ((prev.rotation || 0) + delta) % 360,
-          }));
+            }));
         }
       }
 
-      // Rotate Left (Ctrl+Shift+R)
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "r") {
         e.preventDefault();
         const item = layerList.find((l) => l.id === selectedId);
@@ -301,13 +291,12 @@ export default function ImageEditor() {
           }));
         }
       }
-      
+
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowUp") {
         e.preventDefault();
         bringLayerForward();
       }
-  
-      // Send Backward (Ctrl+Shift+Down)
+
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "ArrowDown") {
         e.preventDefault();
         sendLayerBackward();
@@ -332,17 +321,13 @@ export default function ImageEditor() {
     setLockedLayers,
   ]);
 
-  // ...existing code...
-
   useEffect(() => {
-    // Move Konva nodes to match layerList order
     layerList.forEach((item) => {
       const node = shapeRefs.current[item.id];
       if (node) node.moveToTop();
     });
     stageRef.current?.batchDraw();
   }, [layerList]);
-  // ...existing code...
 
   function bringLayerForward() {
     if (!selectedId) return;
@@ -365,8 +350,6 @@ export default function ImageEditor() {
       return newList;
     });
   }
-
-  // ...existing code...
 
   useEffect(() => {
     if (imageObj) {
@@ -1767,6 +1750,22 @@ export default function ImageEditor() {
           className="w-8 h-8 border rounded"
           title="Pick canvas background color"
         />
+        <input
+          type="text"
+          value={canvasBgColor}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (/^#([0-9A-Fa-f]{3}){1,2}$/.test(val)) {
+              pushUndoState();
+              setCanvasBgColor(val);
+            } else {
+              setCanvasBgColor(val);
+            }
+          }}
+          className="ml-2 w-24 px-2 py-1 border rounded bg-gray-50 text-gray-700"
+          style={{ fontFamily: "monospace" }}
+          title="Hex color value"
+        />
       </div>
       <Sidebar
         replaceBgOpen={replaceBgOpen}
@@ -2081,29 +2080,27 @@ export default function ImageEditor() {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="p-2 border rounded w-[240px] bg-white max-h-[400px] overflow-y-auto"
+                    className="p-2 border rounded w-[240px] bg-white max-h-[400px] overflow-y-auto overflow-x-hidden"
                   >
                     {layerList.map((item, index) => (
                       <Draggable key={item.id} draggableId={item.id.toString()} index={index}>
-                        {(provided) => (
+                        {(provided, snapshot) => (
                           <div
                             ref={provided.innerRef}
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
-                            className={`p-2 mb-2 bg-gray-100 rounded shadow-sm flex items-center justify-center gap-2 hover:bg-gray-200 cursor-pointer ${selectedId === item.id ? "bg-blue-100" : ""
-                              }`}
+                            className={`p-2 mb-2 rounded shadow-sm flex items-center gap-2 cursor-pointer transition ${selectedId === item.id ? "bg-blue-100" : "bg-gray-100"} ${snapshot.isDragging ? "ring-2 ring-blue-400 bg-white z-50" : ""}`}
+                            style={{
+                              ...provided.draggableProps.style,
+                              opacity: snapshot.isDragging ? 0.8 : 1,
+                            }}
                             onClick={() => handleSelect(item.id, item.type)}
                             onContextMenu={(e) => handleLayerRightClick(e, item)}
                           >
-                            <div className="w-15 h-15 flex items-center justify-center border rounded overflow-hidden bg-white">
+                            <div className="w-10 h-10 flex items-center justify-center border rounded overflow-hidden bg-white">
                               {item.type === "mainImage" && (
-                                <img
-                                  src="./frame.jpg"
-                                  alt="Main"
-                                  className="w-full h-full object-cover"
-                                />
+                                <img src="./frame.jpg" alt="Main" className="w-full h-full object-cover" />
                               )}
-
                               {item.type === "text" && (
                                 <span
                                   style={{
@@ -2117,17 +2114,14 @@ export default function ImageEditor() {
                                   A
                                 </span>
                               )}
-
                               {item.type === "extraImage" && item.url && (
-                                <img
-                                  src={item.url}
-                                  alt="SVG"
-                                  className="w-full h-full object-contain"
-                                />
+                                <img src={item.url} alt="SVG" className="w-full h-full object-contain" />
                               )}
                             </div>
-
-                            {/* <div className="text-sm truncate">{item.label}</div> */}
+                            <div className="text-xs truncate max-w-[100px]">{item.label}</div>
+                            {snapshot.isDragging && (
+                              <span className="ml-2 text-xs text-gray-400">(Dragging)</span>
+                            )}
                           </div>
                         )}
                       </Draggable>
