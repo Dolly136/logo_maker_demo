@@ -433,60 +433,34 @@ const Sidebar = ({
             <div className="flex justify-end gap-2 mt-6">
               <button
                 onClick={() => {
-                  if (originalImageObj) {
-                    setShowCropRect((prev) => {
-                      const isEnteringCropMode = !prev;
-                      if (isEnteringCropMode) {
-                        setImageObj(originalImageObj);
-                        if (lastCropData) {
-                          setImageProps(lastCropData.imagePropsAtCrop);
-                          setCropArea({
-                            x: lastCropData.cropRect.x,
-                            y: lastCropData.cropRect.y,
-                            width: lastCropData.cropRect.width,
-                            height: lastCropData.cropRect.height,
-                          });
-                        } else {
-                          let newWidth = originalImageObj.width;
-                          let newHeight = originalImageObj.height;
-                          if (
-                            originalImageObj.width > stageWidth ||
-                            originalImageObj.height > stageHeight
-                          ) {
-                            const widthRatio = stageWidth / originalImageObj.width;
-                            const heightRatio = stageHeight / originalImageObj.height;
-                            const scale = Math.min(widthRatio, heightRatio);
-                            newWidth = originalImageObj.width * scale;
-                            newHeight = originalImageObj.height * scale;
-                          }
-                          setImageProps({
-                            x: (stageWidth - newWidth) / 2,
-                            y: (stageHeight - newHeight) / 2,
-                            scaleX: newWidth / originalImageObj.width,
-                            scaleY: newHeight / originalImageObj.height,
-                            rotation: 0,
-                            width: originalImageObj.width,
-                            height: originalImageObj.height,
-                          });
-                          setCropArea({
-                            x: (stageWidth - newWidth) / 2,
-                            y: (stageHeight - newHeight) / 2,
-                            width: newWidth,
-                            height: newHeight,
-                          });
-                        }
-                      }
-                      return !prev;
+                  // Cancel Crop logic
+                  setShowCropRect(false);
+                  setOpenColorFilter("");
+                  if (lastCropData && originalImageObj) {
+                    setImageProps({
+                      0: lastCropData.imagePropsAtCrop,
                     });
-                    setSelected(false);
-                    setOpenColorFilter("crop");
+                    setCropArea({
+                      ...lastCropData.cropRect,
+                    });
+                    setImageObj([
+                      {
+                        id: Date.now().toString(),
+                        image: originalImageObj.image,
+                        label: "Image",
+                        type: "mainImage",
+                        width: originalImageObj.width,
+                        height: originalImageObj.height,
+                      },
+                    ]);
                   }
+                  setSelected(false);
                 }}
                 className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-                disabled={!originalImageObj}
               >
-                {showCropRect ? "Cancel Crop" : "Crop Image"}
+                Cancel Crop
               </button>
+
               <button
                 onClick={handleCrop}
                 className="px-6 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"

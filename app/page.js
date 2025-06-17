@@ -12,7 +12,7 @@ import {
   svgToImage,
 } from "@/utils/servicesFunction";
 import { useEffect, useRef, useState } from "react";
-import { DragDropContext, Draggable, Droppable } from "react-beautiful-dnd";
+import DragListView from "react-drag-listview";
 import {
   Image as KonvaImage,
   Text as KonvaText,
@@ -97,7 +97,7 @@ export default function ImageEditor() {
   const [canvasBgColor, setCanvasBgColor] = useState("#ffffff");
   const [appliedFilterKey, setAppliedFilterKey] = useState(null);
 
-  console.log(layerList, 'layerList');
+  console.log(layerList, "layerList");
 
   useEffect(() => {
     if (canvasSize.label === "Custom (enter below)") {
@@ -183,9 +183,9 @@ export default function ImageEditor() {
             prev.map((t) =>
               t.id === item.id
                 ? {
-                  ...t,
-                  scaleX: t.scaleX ? -t.scaleX : -1,
-                }
+                    ...t,
+                    scaleX: t.scaleX ? -t.scaleX : -1,
+                  }
                 : t,
             ),
           );
@@ -194,9 +194,9 @@ export default function ImageEditor() {
             prev.map((img) =>
               img.id === item.id
                 ? {
-                  ...img,
-                  scaleX: img.scaleX ? -img.scaleX : -1,
-                }
+                    ...img,
+                    scaleX: img.scaleX ? -img.scaleX : -1,
+                  }
                 : img,
             ),
           );
@@ -217,9 +217,9 @@ export default function ImageEditor() {
             prev.map((t) =>
               t.id === item.id
                 ? {
-                  ...t,
-                  scaleY: t.scaleY ? -t.scaleY : -1,
-                }
+                    ...t,
+                    scaleY: t.scaleY ? -t.scaleY : -1,
+                  }
                 : t,
             ),
           );
@@ -228,9 +228,9 @@ export default function ImageEditor() {
             prev.map((img) =>
               img.id === item.id
                 ? {
-                  ...img,
-                  scaleY: img.scaleY ? -img.scaleY : -1,
-                }
+                    ...img,
+                    scaleY: img.scaleY ? -img.scaleY : -1,
+                  }
                 : img,
             ),
           );
@@ -305,7 +305,6 @@ export default function ImageEditor() {
       }
     };
 
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
@@ -336,6 +335,7 @@ export default function ImageEditor() {
     setLayerList((prev) => {
       const idx = prev.findIndex((l) => l.id === selectedId);
       if (idx === -1 || idx === prev.length - 1) return prev;
+
       const newList = [...prev];
       [newList[idx], newList[idx + 1]] = [newList[idx + 1], newList[idx]];
       return newList;
@@ -347,6 +347,7 @@ export default function ImageEditor() {
     setLayerList((prev) => {
       const idx = prev.findIndex((l) => l.id === selectedId);
       if (idx <= 0) return prev;
+
       const newList = [...prev];
       [newList[idx], newList[idx - 1]] = [newList[idx - 1], newList[idx]];
       return newList;
@@ -655,6 +656,7 @@ export default function ImageEditor() {
     img.onload = () => {
       let newWidth = img.width;
       let newHeight = img.height;
+
       if (img.width > stageWidth || img.height > stageHeight) {
         const widthRatio = stageWidth / img.width;
         const heightRatio = stageHeight / img.height;
@@ -662,32 +664,40 @@ export default function ImageEditor() {
         newWidth = img.width * scale;
         newHeight = img.height * scale;
       }
-      setOriginalImageObj(img);
-      setImageObj([
-        {
-          id: Date.now().toString(),
-          image: img,
-          label: "Image",
-          type: "mainImage",
-        },
-      ]);
-      setImageProps({
-        x: (stageWidth - newWidth) / 2,
-        y: (stageHeight - newHeight) / 2,
-        scaleX: newWidth / img.width,
-        scaleY: newHeight / img.height,
-        rotation: 0,
+
+      const imgObj = {
+        id: Date.now().toString(),
+        image: img,
+        label: "Image",
+        type: "mainImage",
         width: img.width,
         height: img.height,
+      };
+
+      const centeredX = (stageWidth - newWidth) / 2;
+      const centeredY = (stageHeight - newHeight) / 2;
+
+      setOriginalImageObj(imgObj);
+      setImageObj([imgObj]);
+      setImageProps({
+        0: {
+          x: centeredX,
+          y: centeredY,
+          scaleX: newWidth / img.width,
+          scaleY: newHeight / img.height,
+          rotation: 0,
+          width: img.width,
+          height: img.height,
+        },
       });
       setCropArea({
-        x: (stageWidth - newWidth) / 2,
-        y: (stageHeight - newHeight) / 2,
+        x: centeredX,
+        y: centeredY,
         width: newWidth,
         height: newHeight,
       });
       setLastCropData(null);
-      setSelected(false);
+      setSelectedId(null);
       setShowCropRect(false);
     };
     return () => {
@@ -766,8 +776,8 @@ export default function ImageEditor() {
   }
 
   const [croppingIdx, setCroppingIdx] = useState(null);
-  const [originalImageObjs, setOriginalImageObjs] = useState({}); // { idx: originalImage }
-  const [lastCropDatas, setLastCropDatas] = useState({}); // { idx: { cropRect, imagePropsAtCrop } }
+  const [originalImageObjs, setOriginalImageObjs] = useState({}); 
+  const [lastCropDatas, setLastCropDatas] = useState({}); 
 
   const initiateCropMode = (idx) => {
     if (!imageObj[idx] || showCropRect) return;
@@ -775,18 +785,14 @@ export default function ImageEditor() {
     setShowCropRect(true);
     setCroppingIdx(idx);
 
-    // If we have last crop data for this image, restore it
     if (lastCropDatas[idx] && originalImageObjs[idx]) {
-      setImageObj((prev) =>
-        prev.map((img, i) => (i === idx ? originalImageObjs[idx] : img))
-      );
+      setImageObj((prev) => prev.map((img, i) => (i === idx ? originalImageObjs[idx] : img)));
       setImageProps((prev) => ({
         ...prev,
         [idx]: lastCropDatas[idx].imagePropsAtCrop,
       }));
       setCropArea(lastCropDatas[idx].cropRect);
     } else {
-      // First time cropping, store original image and set default crop area
       setOriginalImageObjs((prev) => ({
         ...prev,
         [idx]: imageObj[idx],
@@ -795,14 +801,11 @@ export default function ImageEditor() {
       const img = imageObj[idx];
       let newWidth = img.width;
       let newHeight = img.height;
-
-      if (img.width > stageWidth || img.height > stageHeight) {
-        const widthRatio = stageWidth / img.width;
-        const heightRatio = stageHeight / img.height;
-        const scale = Math.min(widthRatio, heightRatio);
-        newWidth = img.width * scale;
-        newHeight = img.height * scale;
-      }
+      const widthRatio = stageWidth / img.width;
+      const heightRatio = stageHeight / img.height;
+      const scale = Math.min(widthRatio, heightRatio);
+      newWidth = img.width * scale;
+      newHeight = img.height * scale;
 
       const centeredX = (stageWidth - newWidth) / 2;
       const centeredY = (stageHeight - newHeight) / 2;
@@ -832,7 +835,6 @@ export default function ImageEditor() {
     setOpenColorFilter("crop");
   };
 
-
   function updateImageColors(imgObj, newColorMap, newFillTypeMap, newGradientMap) {
     const newSvg = replaceColorsWithGradients(
       imgObj.svgText,
@@ -845,12 +847,12 @@ export default function ImageEditor() {
         prev.map((i) =>
           i.id === imgObj.id
             ? {
-              ...i,
-              image: img,
-              colorMap: newColorMap,
-              fillTypeMap: newFillTypeMap,
-              gradientMap: newGradientMap,
-            }
+                ...i,
+                image: img,
+                colorMap: newColorMap,
+                fillTypeMap: newFillTypeMap,
+                gradientMap: newGradientMap,
+              }
             : i,
         ),
       );
@@ -872,9 +874,9 @@ export default function ImageEditor() {
         };
         const newGradientMap = isGradient
           ? {
-            ...img.gradientMap,
-            [origColor]: { start: newColor.start, end: newColor.end },
-          }
+              ...img.gradientMap,
+              [origColor]: { start: newColor.start, end: newColor.end },
+            }
           : img.gradientMap;
 
         updateImageColors(img, updatedMap, newFillTypes, newGradientMap);
@@ -919,8 +921,8 @@ export default function ImageEditor() {
     }
   }
 
-
   function handleLayerRightClick(e, item) {
+    console.log(item, "item");
     e.preventDefault();
     setContextMenu({
       visible: true,
@@ -1082,7 +1084,6 @@ export default function ImageEditor() {
   const applyFilter = (filterKey) => {
     pushUndoState();
     setAppliedFilterKey(filterKey);
-    // const imageNode = imageNodeRef.current;
     const imageNode = shapeRefs.current["main-image"];
     const filter = filterStyles[filterKey];
 
@@ -1100,31 +1101,67 @@ export default function ImageEditor() {
   };
 
   const handleFileChange = (e) => {
-    pushUndoState();
     const file = e.target.files[0];
-    if (file && file.type.startsWith("image/")) {
-      const url = URL.createObjectURL(file);
-      setUploadedImages((prev) => [...prev, { file, url, id: Date.now().toString() }]);
-      if (imageFile === null) {
-        setImageFile(file);
-      }
-      // Add to imageObj as an object
-      const img = new window.Image();
-      img.src = url;
-      img.onload = () => {
-        setImageObj((prev) => [
-          ...prev,
-          {
-            id: Date.now().toString(),
-            image: img,
-            label: "Image",
-            type: "mainImage",
-          },
-        ]);
-      };
-    }
-  };
+    if (!file) return;
 
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+
+    const url = URL.createObjectURL(file);
+    img.src = url;
+
+    img.onload = () => {
+      const id = Date.now().toString();
+
+      let newWidth = img.width;
+      let newHeight = img.height;
+
+      const widthRatio = stageWidth / img.width;
+      const heightRatio = stageHeight / img.height;
+      const scale = Math.min(widthRatio, heightRatio);
+
+      newWidth = img.width * scale;
+      newHeight = img.height * scale;
+
+      const centeredX = (stageWidth - newWidth) / 2;
+      const centeredY = (stageHeight - newHeight) / 2;
+
+      setUploadedImages((prev) => [...prev, { id, file, url }]);
+
+      setImageObj((prev) => {
+        if (prev.length === 0) {
+          return [
+            {
+              id,
+              image: img,
+              label: "Image",
+              type: "mainImage",
+              width: img.width,
+              height: img.height,
+            },
+          ];
+        }
+        return prev;
+      });
+
+      setImageProps((prev) => {
+        if (Object.keys(prev).length === 0) {
+          return {
+            0: {
+              x: centeredX,
+              y: centeredY,
+              scaleX: newWidth / img.width,
+              scaleY: newHeight / img.height,
+              rotation: 0,
+              width: img.width,
+              height: img.height,
+            },
+          };
+        }
+        return prev;
+      });
+    };
+  };
 
   useEffect(() => {
     const newLayerList = [];
@@ -1134,11 +1171,11 @@ export default function ImageEditor() {
     }
 
     imageObj.forEach((img) => {
-      console.log(img, 'img');
+      console.log(img, "img");
       newLayerList.push({
         id: img.id,
-        type: img.type || "mainImage",
-        label: img.label || "Image",
+        type: img.type,
+        label: img.label,
         url: img,
       });
     });
@@ -1156,10 +1193,19 @@ export default function ImageEditor() {
 
   const handleAddUploadedImageToCanvas = (img) => {
     const image = new window.Image();
-    image.crossOrigin = "anonymous"; // If needed for CORS
+    image.crossOrigin = "anonymous";
     image.src = img.url;
+
     image.onload = () => {
-      setImageObj((prev) => [...prev, image]);
+      const newImageObj = {
+        id: Date.now().toString(),
+        image,
+        label: "Uploaded Image",
+        type: "mainImage",
+        width: image.width,
+        height: image.height,
+      };
+      setImageObj((prev) => [...prev, newImageObj]);
     };
   };
 
@@ -1174,8 +1220,7 @@ export default function ImageEditor() {
     pushUndoState();
     if (croppingIdx === null) return;
 
-    // Use the correct image node and crop node for the croppingIdx
-    const imageNode = shapeRefs.current[`image-${croppingIdx}`];
+    const imageNode = shapeRefs.current[croppingIdx];
     const cropNode = shapeRefs.current["crop-rect"];
     if (!imageNode || !cropNode || !imageObj[croppingIdx]) return;
 
@@ -1194,10 +1239,9 @@ export default function ImageEditor() {
     const cropWidth = cropNode.width() * cropNode.scaleX();
     const cropHeight = cropNode.height() * cropNode.scaleY();
 
-    // Use the correct image for cropping
-    const currentImage = imageObj[croppingIdx];
+    const currentImageData = imageObj[croppingIdx];
+    const originalImg = currentImageData.image;
 
-    // Calculate transform relative to the current image
     const absTransform = imageNode.getAbsoluteTransform().copy().invert();
     const topLeft = absTransform.point({ x: cropX, y: cropY });
     const bottomRight = absTransform.point({
@@ -1207,40 +1251,44 @@ export default function ImageEditor() {
 
     const srcX = Math.max(0, topLeft.x);
     const srcY = Math.max(0, topLeft.y);
-    const srcWidth = Math.min(currentImage.width - srcX, bottomRight.x - topLeft.x);
-    const srcHeight = Math.min(currentImage.height - srcY, bottomRight.y - topLeft.y);
+    const srcWidth = Math.min(originalImg.width - srcX, bottomRight.x - topLeft.x);
+    const srcHeight = Math.min(originalImg.height - srcY, bottomRight.y - topLeft.y);
+
+    // Safety check
+    if (srcWidth <= 0 || srcHeight <= 0) {
+      console.warn("Invalid crop dimensions");
+      return;
+    }
 
     const canvas = document.createElement("canvas");
     canvas.width = srcWidth;
     canvas.height = srcHeight;
 
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(
-      currentImage,
-      srcX,
-      srcY,
-      srcWidth,
-      srcHeight,
-      0,
-      0,
-      srcWidth,
-      srcHeight
-    );
+    ctx.drawImage(originalImg, srcX, srcY, srcWidth, srcHeight, 0, 0, srcWidth, srcHeight);
 
     const croppedImage = new window.Image();
     croppedImage.src = canvas.toDataURL();
-    croppedImage.onload = () => {
-      setImageObj((prev) =>
-        prev.map((img, idx) => (idx === croppingIdx ? croppedImage : img))
-      );
 
+    croppedImage.onload = () => {
+      const updatedImageObj = {
+        ...currentImageData,
+        image: croppedImage,
+        width: croppedImage.width,
+        height: croppedImage.height,
+      };
+
+      // Replace in imageObj
+      setImageObj((prev) => prev.map((img, idx) => (idx === croppingIdx ? updatedImageObj : img)));
+
+      // Update its props
       setImageProps((prev) => ({
         ...prev,
         [croppingIdx]: {
           x: cropX,
           y: cropY,
-          scaleX: cropWidth / croppedImage.width,
-          scaleY: cropHeight / croppedImage.height,
+          scaleX: 1,
+          scaleY: 1,
           width: croppedImage.width,
           height: croppedImage.height,
           rotation: imagePropsBeforeCrop.rotation,
@@ -1251,6 +1299,7 @@ export default function ImageEditor() {
       setSelectedId(null);
       setCroppingIdx(null);
 
+      // Store last crop data
       setLastCropDatas((prev) => ({
         ...prev,
         [croppingIdx]: {
@@ -1270,13 +1319,8 @@ export default function ImageEditor() {
     pushUndoState();
     let newAspectRatio = null;
 
-    if (
-      value === "original" &&
-      imageProps[croppingIdx]?.width &&
-      imageProps[croppingIdx]?.height
-    ) {
-      newAspectRatio =
-        imageProps[croppingIdx].width / imageProps[croppingIdx].height;
+    if (value === "original" && imageProps[croppingIdx]?.width && imageProps[croppingIdx]?.height) {
+      newAspectRatio = imageProps[croppingIdx].width / imageProps[croppingIdx].height;
     } else if (value !== "none") {
       const [widthStr, heightStr] = value.split(":");
       newAspectRatio = Number(widthStr) / Number(heightStr);
@@ -1304,7 +1348,7 @@ export default function ImageEditor() {
     }
 
     // Use the correct image node for croppingIdx
-    const imageNode = shapeRefs.current[`image-${croppingIdx}`];
+    const imageNode = shapeRefs.current[croppingIdx];
     let imageClientRect = imageNode ? imageNode.getClientRect() : null;
 
     let cropX = (stageWidth - newCropWidth) / 2;
@@ -1396,138 +1440,6 @@ export default function ImageEditor() {
     setShowCropRect(false);
   };
 
-  const removeBackground = async () => {
-    if (!imageFile) {
-      alert("Please upload an image first.");
-      return;
-    }
-    pushUndoState();
-    const formData = new FormData();
-    formData.append("file", imageFile);
-    try {
-      const response = await fetch("http://192.168.0.168:8000/remove-bg/", {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) {
-        throw new Error("Failed to remove background");
-      }
-      const blob = await response.blob();
-      setBgRemovedBlob(blob);
-      setIsBgRemoved(true);
-      const imageURL = URL.createObjectURL(blob);
-      const bgRemovedImage = new window.Image();
-      bgRemovedImage.src = imageURL;
-      bgRemovedImage.onload = () => {
-        setImageObj([bgRemovedImage]);
-        setSelected(false);
-        setShowCropRect(false);
-        setImageProps({
-          x: (stageWidth - bgRemovedImage.width) / 2,
-          y: (stageHeight - bgRemovedImage.height) / 2,
-          scaleX: 1,
-          scaleY: 1,
-          rotation: 0,
-          width: bgRemovedImage.width,
-          height: bgRemovedImage.height,
-        });
-      };
-    } catch (error) {
-      console.error("Background removal failed:", error);
-      alert("Background removal failed.");
-    }
-  };
-
-  const replaceBgPopUpOpen = async () => {
-    if (!imageFile) {
-      alert("Please upload an image first.");
-      return;
-    }
-    pushUndoState();
-    if (!isBgRemoved) {
-      const formData = new FormData();
-      formData.append("file", imageFile);
-      try {
-        const response = await fetch("http://192.168.0.168:8000/remove-bg/", {
-          method: "POST",
-          body: formData,
-        });
-        if (!response.ok) {
-          throw new Error("Failed to remove background");
-        }
-        const blob = await response.blob();
-        setBgRemovedBlob(blob);
-        setIsBgRemoved(true);
-        const imageURL = URL.createObjectURL(blob);
-        const bgRemovedImage = new window.Image();
-        bgRemovedImage.src = imageURL;
-        bgRemovedImage.onload = () => {
-          setImageObj(bgRemovedImage);
-          setSelected(false);
-          setShowCropRect(false);
-          setImageProps({
-            x: (stageWidth - bgRemovedImage.width) / 2,
-            y: (stageHeight - bgRemovedImage.height) / 2,
-            scaleX: 1,
-            scaleY: 1,
-            rotation: 0,
-            width: bgRemovedImage.width,
-            height: bgRemovedImage.height,
-          });
-          setReplaceBgOpen(true);
-        };
-      } catch (error) {
-        console.error("Background removal failed:", error);
-        alert("Background removal failed.");
-      }
-    } else {
-      setReplaceBgOpen(true);
-    }
-  };
-
-  const upscaleImage = async () => {
-    if (!imageFile) {
-      alert("Please upload an image first.");
-      return;
-    }
-    pushUndoState();
-    const formData = new FormData();
-    formData.append("file", imageFile);
-    try {
-      const response = await fetch("http://192.168.0.30:8000/upscale", {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) {
-        throw new Error("Failed to upscale image");
-      }
-      const blob = await response.blob();
-      const imageURL = URL.createObjectURL(blob);
-      const loadedImage = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = imageURL;
-      });
-      setImageObj(loadedImage);
-      setSelected(false);
-      setShowCropRect(false);
-      setImageProps({
-        x: (stageWidth - loadedImage.width) / 2,
-        y: (stageHeight - loadedImage.height) / 2,
-        scaleX: 1,
-        scaleY: 1,
-        rotation: 0,
-        width: loadedImage.width,
-        height: loadedImage.height,
-      });
-      URL.revokeObjectURL(imageURL);
-    } catch (error) {
-      console.error("Upscale Image failed:", error);
-      alert("Upscale Image failed.");
-    }
-  };
-
   const generateBackground = async () => {
     if (!imageFile || !prompt.trim()) {
       alert("Please upload an image and enter a prompt.");
@@ -1602,64 +1514,59 @@ export default function ImageEditor() {
     };
   }, []);
 
-  const onDragEnd = (result) => {
-    if (!result.destination) return;
-
-    pushUndoState();
-
-    const reordered = Array.from(layerList);
-    const [moved] = reordered.splice(result.source.index, 1);
-    reordered.splice(result.destination.index, 0, moved);
-    setLayerList(reordered);
-
-    setTimeout(() => {
-      reordered.forEach((item) => {
-        const node = shapeRefs.current[item.id];
-        if (node) node.moveToTop();
-      });
-      stageRef.current?.batchDraw();
-    }, 0);
-  };
-
   function handleContextMenuDuplicate() {
     const item = layerList.find((l) => l.id === contextMenu.layerId);
     if (!item) return;
+
     pushUndoState();
+
+    const newId = Date.now().toString();
+
     if (item.type === "text") {
+      const original = texts.find((t) => t.id === item.id);
+      if (!original) return;
+
       const newText = {
-        ...item,
-        id: Date.now().toString(),
-        x: item.x + 20,
-        y: item.y + 20,
-        label: "Text (copy)",
+        ...original,
+        id: newId,
+        x: original.x + 20,
+        y: original.y + 20,
+        label: (original.label || "Text") + " (copy)",
       };
+
       setTexts((prev) => [...prev, newText]);
-    } else if (item.type === "extraImage" || item.type === "mainImage") {
-      // Duplicate image (main or extra)
-      const imgObj = images.find((img) => img.id === item.id) || {
-        id: "main-image",
-        image: imageObj,
-        x: imageProps.x,
-        y: imageProps.y,
-        width: imageProps.width,
-        height: imageProps.height,
-        scaleX: imageProps.scaleX,
-        scaleY: imageProps.scaleY,
-        rotation: imageProps.rotation,
-        url: imageObj?.src,
-        label: "Image",
+      setLayerList((prev) => [...prev, { id: newId, type: "text", label: newText.label }]);
+    } else if (item.type === "extraImage") {
+      const original = images.find((img) => img.id === item.id);
+      if (!original) return;
+
+      const newImage = {
+        ...original,
+        id: newId,
+        x: original.x + 20,
+        y: original.y + 20,
+        label: (original.label || "Image") + " (copy)",
+      };
+
+      setImages((prev) => [...prev, newImage]);
+      setLayerList((prev) => [...prev, { id: newId, type: "extraImage", label: newImage.label }]);
+    } else if (item.type === "mainImage") {
+      const original = imageObj.find((img) => img.id === item.id);
+      if (!original) return;
+
+      const newMainImage = {
+        ...original,
+        id: newId,
+        x: (original.x || 0) + 20,
+        y: (original.y || 0) + 20,
+        label: (original.label || "Image") + " (copy)",
         type: "mainImage",
       };
-      const newId = Date.now().toString();
-      setImages((prev) => [
+
+      setImageObj((prev) => [...prev, newMainImage]);
+      setLayerList((prev) => [
         ...prev,
-        {
-          ...imgObj,
-          id: newId,
-          x: imgObj.x + 20,
-          y: imgObj.y + 20,
-          label: (imgObj.label || "Image") + " (copy)",
-        },
+        { id: newId, type: "mainImage", label: newMainImage.label },
       ]);
     }
   }
@@ -1667,47 +1574,65 @@ export default function ImageEditor() {
   function handleContextMenuCopy() {
     const item = layerList.find((l) => l.id === contextMenu.layerId);
     if (!item) return;
-    setClipboard({ ...item });
+
+    let clipboardItem = null;
+
+    if (item.type === "text") {
+      clipboardItem = texts.find((t) => t.id === item.id);
+    } else if (item.type === "extraImage") {
+      clipboardItem = images.find((img) => img.id === item.id);
+    } else if (item.type === "mainImage") {
+      clipboardItem = imageObj.find((img) => img.id === item.id);
+    }
+
+    if (clipboardItem) {
+      setClipboard({ ...clipboardItem });
+    }
   }
 
   function handleContextMenuPaste() {
     if (!clipboard) return;
+
     pushUndoState();
+
+    const newId = Date.now().toString();
+
     if (clipboard.type === "text") {
       const newText = {
         ...clipboard,
-        id: Date.now().toString(),
+        id: newId,
         x: clipboard.x + 30,
         y: clipboard.y + 30,
-        label: "Text (copy)",
+        label: (clipboard.label || "Text") + " (copy)",
       };
+
       setTexts((prev) => [...prev, newText]);
-    } else if (clipboard.type === "extraImage" || clipboard.type === "mainImage") {
-      // Paste image (main or extra)
-      const imgObj = images.find((img) => img.id === clipboard.id) || {
-        id: "main-image",
-        image: imageObj,
-        x: imageProps.x,
-        y: imageProps.y,
-        width: imageProps.width,
-        height: imageProps.height,
-        scaleX: imageProps.scaleX,
-        scaleY: imageProps.scaleY,
-        rotation: imageProps.rotation,
-        url: imageObj?.src,
-        label: "Image",
+      setLayerList((prev) => [...prev, { id: newId, type: "text", label: newText.label }]);
+    } else if (clipboard.type === "extraImage") {
+      const newImage = {
+        ...clipboard,
+        id: newId,
+        x: clipboard.x + 30,
+        y: clipboard.y + 30,
+        label: (clipboard.label || "Image") + " (copy)",
+      };
+
+      setImages((prev) => [...prev, newImage]);
+      setLayerList((prev) => [...prev, { id: newId, type: "extraImage", label: newImage.label }]);
+    } else if (clipboard.type === "mainImage") {
+      const newMainImage = {
+        ...clipboard,
+        id: newId,
+        x: (clipboard.x || 0) + 30,
+        y: (clipboard.y || 0) + 30,
+        label: (clipboard.label || "Image") + " (copy)",
         type: "mainImage",
       };
-      const newId = Date.now().toString();
-      setImages((prev) => [
+
+      setImageObj((prev) => [...prev, newMainImage]);
+      setLayerList((prev) => [
         ...prev,
-        {
-          ...imgObj,
-          id: newId,
-          x: imgObj.x + 30,
-          y: imgObj.y + 30,
-          label: (imgObj.label || "Image") + " (copy)",
-        },
+        { id: newId, type: "mainImage", label: newMainImage.label },
       ]);
     }
   }
@@ -1729,10 +1654,10 @@ export default function ImageEditor() {
         prev.map((t) =>
           t.id === item.id
             ? {
-              ...t,
-              scaleX: horizontal ? (t.scaleX ? -t.scaleX : -1) : t.scaleX || 1,
-              scaleY: !horizontal ? (t.scaleY ? -t.scaleY : -1) : t.scaleY || 1,
-            }
+                ...t,
+                scaleX: horizontal ? (t.scaleX ? -t.scaleX : -1) : t.scaleX || 1,
+                scaleY: !horizontal ? (t.scaleY ? -t.scaleY : -1) : t.scaleY || 1,
+              }
             : t,
         ),
       );
@@ -1741,18 +1666,29 @@ export default function ImageEditor() {
         prev.map((img) =>
           img.id === item.id
             ? {
-              ...img,
-              scaleX: horizontal ? (img.scaleX ? -img.scaleX : -1) : img.scaleX || 1,
-              scaleY: !horizontal ? (img.scaleY ? -img.scaleY : -1) : img.scaleY || 1,
-            }
+                ...img,
+                scaleX: horizontal ? (img.scaleX ? -img.scaleX : -1) : img.scaleX || 1,
+                scaleY: !horizontal ? (img.scaleY ? -img.scaleY : -1) : img.scaleY || 1,
+              }
             : img,
         ),
       );
     } else if (item.type === "mainImage") {
       setImageProps((prev) => ({
         ...prev,
-        scaleX: horizontal ? (prev.scaleX ? -prev.scaleX : -1) : prev.scaleX || 1,
-        scaleY: !horizontal ? (prev.scaleY ? -prev.scaleY : -1) : prev.scaleY || 1,
+        [item.id]: {
+          ...prev[item.id],
+          scaleX: horizontal
+            ? prev[item.id]?.scaleX
+              ? -prev[item.id].scaleX
+              : -1
+            : prev[item.id]?.scaleX || 1,
+          scaleY: !horizontal
+            ? prev[item.id]?.scaleY
+              ? -prev[item.id].scaleY
+              : -1
+            : prev[item.id]?.scaleY || 1,
+        },
       }));
     }
     setContextMenu({ ...contextMenu, visible: false });
@@ -1778,7 +1714,10 @@ export default function ImageEditor() {
     } else if (item.type === "mainImage") {
       setImageProps((prev) => ({
         ...prev,
-        rotation: ((prev.rotation || 0) + delta) % 360,
+        [item.id]: {
+          ...prev[item.id],
+          rotation: ((prev[item.id]?.rotation || 0) + delta + 360) % 360,
+        },
       }));
     }
     setContextMenu({ ...contextMenu, visible: false });
@@ -1795,6 +1734,25 @@ export default function ImageEditor() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [clipboard, texts, images]);
+
+  const onDragEnd = (fromIndex, toIndex) => {
+    const actualFromIndex = layerList.length - 1 - fromIndex;
+    const actualToIndex = layerList.length - 1 - toIndex;
+
+    const updatedList = [...layerList];
+    const [movedItem] = updatedList.splice(actualFromIndex, 1);
+    updatedList.splice(actualToIndex, 0, movedItem);
+
+    setLayerList(updatedList);
+  };
+
+  const dragProps = {
+    onDragEnd,
+    nodeSelector: "li",
+    handleSelector: ".drag-handle",
+  };
+
+  console.log(layerList, "layerList");
 
   return (
     <div className="flex w-full bg-gray-100">
@@ -1925,17 +1883,13 @@ export default function ImageEditor() {
           setCropArea={setCropArea}
           setSelected={setSelected}
           showCropRect={showCropRect}
-          removeBackground={removeBackground}
           imageFile={imageFile}
-          replaceBgPopUpOpen={replaceBgPopUpOpen}
-          upscaleImage={upscaleImage}
           handleOpenColorFilter={handleOpenColorFilter}
           imageObj={imageObj}
           handleDownload={handleDownload}
           stageHeight={stageHeight}
           stageWidth={stageWidth}
           setOpenColorFilter={setOpenColorFilter}
-
         />
 
         {contextMenu.visible && (
@@ -1992,33 +1946,33 @@ export default function ImageEditor() {
               {imageObj?.map((img, idx) => (
                 <KonvaImage
                   key={idx}
-                  image={img?.image}
-                  ref={node => (shapeRefs.current[`image-${idx}`] = node)}
-                  {...imageProps[idx]} // imageProps should be an array/object per image
-                  x={imageProps[idx]?.x || 0}
-                  y={imageProps[idx]?.y || 0}
-                  scaleX={imageProps[idx]?.scaleX || 1}
-                  scaleY={imageProps[idx]?.scaleY || 1}
-                  rotation={imageProps[idx]?.rotation || 0}
-                  width={imageProps[idx]?.width || img.width}
-                  height={imageProps[idx]?.height || img.height}
-                  draggable={!showCropRect && !lockedLayers[`image-${idx}`]}
-                  onClick={() => !showCropRect && handleSelect(`image-${idx}`, "mainImage")}
+                  image={img.image}
+                  ref={(node) => (shapeRefs.current[img.id] = node)}
+                  {...imageProps[img.id]}
+                  x={imageProps[img.id]?.x || 0}
+                  y={imageProps[img.id]?.y || 0}
+                  scaleX={imageProps[img.id]?.scaleX || 1}
+                  scaleY={imageProps[img.id]?.scaleY || 1}
+                  rotation={imageProps[img.id]?.rotation || 0}
+                  width={imageProps[img.id]?.width || img.width}
+                  height={imageProps[img.id]?.height || img.height}
+                  draggable={!showCropRect && !lockedLayers[img.id]}
+                  onClick={() => !showCropRect && handleSelect(img.id, "mainImage")}
                   onDblClick={() => initiateCropMode(idx)}
-                  onContextMenu={e => {
+                  onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
-                      { id: `image-${idx}`, type: "mainImage" }
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
+                      { id: img.id, type: "mainImage" },
                     );
                   }}
-                  onTransformEnd={e => {
-                    if (lockedLayers[`image-${idx}`]) return;
+                  onTransformEnd={() => {
+                    if (lockedLayers[img.id]) return;
                     pushUndoState();
-                    const node = shapeRefs.current[`image-${idx}`];
-                    setImageProps(prev => ({
+                    const node = shapeRefs.current[img.id];
+                    setImageProps((prev) => ({
                       ...prev,
-                      [idx]: {
+                      [img.id]: {
                         x: node.x(),
                         y: node.y(),
                         width: node.width(),
@@ -2026,20 +1980,20 @@ export default function ImageEditor() {
                         scaleX: node.scaleX(),
                         scaleY: node.scaleY(),
                         rotation: node.rotation(),
-                      }
+                      },
                     }));
                   }}
-                  onDragEnd={e => {
-                    if (lockedLayers[`image-${idx}`]) return;
+                  onDragEnd={() => {
+                    if (lockedLayers[img.id]) return;
                     pushUndoState();
-                    const node = shapeRefs.current[`image-${idx}`];
-                    setImageProps(prev => ({
+                    const node = shapeRefs.current[img.id];
+                    setImageProps((prev) => ({
                       ...prev,
-                      [idx]: {
-                        ...prev[idx],
+                      [img.id]: {
+                        ...prev[img.id],
                         x: node.x(),
                         y: node.y(),
-                      }
+                      },
                     }));
                   }}
                 />
@@ -2054,15 +2008,7 @@ export default function ImageEditor() {
                   strokeWidth={2}
                   draggable
                   onClick={() => handleSelect("crop-rect", "crop")}
-                  onContextMenu={(e) => {
-                    e.evt.preventDefault();
-                    handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
-                      { id: "crop-rect", type: "crop" },
-                    );
-                  }}
-                  onTransformEnd={(e) => {
-                    pushUndoState();
+                  onTransformEnd={() => {
                     const node = shapeRefs.current["crop-rect"];
                     const scaleX = node.scaleX();
                     const scaleY = node.scaleY();
@@ -2075,22 +2021,21 @@ export default function ImageEditor() {
                       height: Math.max(30, node.height() * scaleY),
                     });
                   }}
-                  onDragEnd={(e) => {
-                    pushUndoState();
+                  onDragEnd={() => {
                     const node = shapeRefs.current["crop-rect"];
                     setCropArea({
                       x: node.x(),
                       y: node.y(),
-                      width: node.width() * node.scaleX(),
-                      height: node.height() * node.scaleY(),
+                      width: node.width(),
+                      height: node.height(),
                     });
                   }}
                 />
               )}
 
-              {texts.map((text) => (
+              {texts.map((text, index) => (
                 <KonvaText
-                  key={text.id}
+                  key={index}
                   ref={(node) => (shapeRefs.current[text.id] = node)}
                   {...text}
                   draggable={!lockedLayers[text.id]}
@@ -2101,7 +2046,7 @@ export default function ImageEditor() {
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
                       { id: text.id, type: "text" },
                     );
                   }}
@@ -2117,9 +2062,9 @@ export default function ImageEditor() {
                 />
               ))}
 
-              {images.map(({ id, image, x, y, ...imgProps }) => (
+              {images.map(({ id, image, x, y, ...imgProps }, index) => (
                 <KonvaImage
-                  key={id}
+                  key={index}
                   ref={(node) => (shapeRefs.current[id] = node)}
                   image={image}
                   x={x}
@@ -2130,7 +2075,7 @@ export default function ImageEditor() {
                   onContextMenu={(e) => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
-                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
+                      { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => {} },
                       { id, type: "extraImage" },
                     );
                   }}
@@ -2186,67 +2131,22 @@ export default function ImageEditor() {
           {showLayerList ? "Hide Layers" : "Show Layers"}
         </button>
 
-        <DragDropContext onDragEnd={onDragEnd}>
-          <Droppable droppableId="layer-list">
-            {(provided) => (
-              <>
-                {showLayerList && (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className="p-2 border rounded w-[240px] bg-white max-h-[400px] overflow-y-auto overflow-x-hidden"
-                  >
-                    {layerList.map((item, index) => (
-                      <Draggable key={item.id} draggableId={item.id.toString()} index={index}>
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            className={`p-2 mb-2 rounded shadow-sm flex items-center gap-2 cursor-pointer transition ${selectedId === item.id ? "bg-blue-100" : "bg-gray-100"} ${snapshot.isDragging ? "ring-2 ring-blue-400 bg-white z-50" : ""}`}
-                            style={{
-                              ...provided.draggableProps.style,
-                              opacity: snapshot.isDragging ? 0.8 : 1,
-                            }}
-                            onClick={() => handleSelect(item.id, item.type)}
-                            onContextMenu={(e) => handleLayerRightClick(e, item)}
-                          >
-                            <div className="w-10 h-10 flex items-center justify-center border rounded overflow-hidden bg-white">
-                              {item.type === "mainImage" && (
-                                <img src="./frame.jpg" alt="Main" className="w-full h-full object-cover" />
-                              )}
-                              {item.type === "text" && (
-                                <span
-                                  style={{
-                                    fontSize: "12px",
-                                    fontFamily: item.fontFamily,
-                                    color: item.fill,
-                                    fontStyle: item.fontStyle,
-                                    textDecoration: item.textDecoration,
-                                  }}
-                                >
-                                  A
-                                </span>
-                              )}
-                              {item.type === "extraImage" && item.url && (
-                                <img src={item.url} alt="SVG" className="w-full h-full object-contain" />
-                              )}
-                            </div>
-                            <div className="text-xs truncate max-w-[100px]">{item.label}</div>
-                            {snapshot.isDragging && (
-                              <span className="ml-2 text-xs text-gray-400">(Dragging)</span>
-                            )}
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </>
-            )}
-          </Droppable>
-        </DragDropContext>
+        <DragListView {...dragProps}>
+          <ul className="space-y-2">
+            {[...layerList].reverse().map((layer, index) => (
+              <li
+                key={index}
+                className="bg-white p-3 border rounded shadow flex justify-between items-center cursor-move drag-handle"
+              >
+                <span className="drag-handle">☰</span>
+                <div className="flex-1 px-2">
+                  <strong className="capitalize">{layer.type}</strong>
+                  <div className="text-sm text-gray-500">{layer.id}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </DragListView>
       </div>
     </div>
   );
