@@ -28,7 +28,7 @@ export default function ImageEditor() {
   const [imageFile, setImageFile] = useState(null);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [originalImageObj, setOriginalImageObj] = useState(null);
-  const [imageObj, setImageObj] = useState(null);
+  const [imageObj, setImageObj] = useState([]);
   const [selected, setSelected] = useState(false);
   const [showCropRect, setShowCropRect] = useState(false);
   const [lastCropData, setLastCropData] = useState(null);
@@ -96,6 +96,8 @@ export default function ImageEditor() {
   const [stageHeight, setStageHeight] = useState(canvasPresets[0].height);
   const [canvasBgColor, setCanvasBgColor] = useState("#ffffff");
   const [appliedFilterKey, setAppliedFilterKey] = useState(null);
+
+  console.log(layerList, 'layerList');
 
   useEffect(() => {
     if (canvasSize.label === "Custom (enter below)") {
@@ -261,7 +263,7 @@ export default function ImageEditor() {
           setImageProps((prev) => ({
             ...prev,
             rotation: ((prev.rotation || 0) + delta) % 360,
-            }));
+          }));
         }
       }
 
@@ -533,32 +535,6 @@ export default function ImageEditor() {
   }, [selectedId]);
 
   useEffect(() => {
-    const newLayerList = [];
-
-    if (selectedBg) {
-      newLayerList.push({ id: "bg", type: "background", label: "Background" });
-    }
-
-    if (imageObj) {
-      newLayerList.push({ id: "main-image", type: "mainImage", label: "Image" });
-    }
-
-    if (showCropRect) {
-      newLayerList.push({ id: "crop-rect", type: "crop", label: "Crop Area" });
-    }
-
-    texts.forEach((text) => {
-      newLayerList.push({ ...text, id: text.id, type: "text", label: "Text" });
-    });
-
-    images.forEach((img) => {
-      newLayerList.push({ ...img, id: img.id, type: "extraImage", label: "Svg" });
-    });
-
-    setLayerList(newLayerList);
-  }, [selectedBg, imageObj, texts, images, showCropRect]);
-
-  useEffect(() => {
     if (!transformerRef.current) return;
 
     if (!selectedId) {
@@ -687,7 +663,14 @@ export default function ImageEditor() {
         newHeight = img.height * scale;
       }
       setOriginalImageObj(img);
-      setImageObj(img);
+      setImageObj([
+        {
+          id: Date.now().toString(),
+          image: img,
+          label: "Image",
+          type: "mainImage",
+        },
+      ]);
       setImageProps({
         x: (stageWidth - newWidth) / 2,
         y: (stageHeight - newHeight) / 2,
@@ -782,6 +765,74 @@ export default function ImageEditor() {
     }
   }
 
+  const [croppingIdx, setCroppingIdx] = useState(null);
+  const [originalImageObjs, setOriginalImageObjs] = useState({}); // { idx: originalImage }
+  const [lastCropDatas, setLastCropDatas] = useState({}); // { idx: { cropRect, imagePropsAtCrop } }
+
+  const initiateCropMode = (idx) => {
+    if (!imageObj[idx] || showCropRect) return;
+
+    setShowCropRect(true);
+    setCroppingIdx(idx);
+
+    // If we have last crop data for this image, restore it
+    if (lastCropDatas[idx] && originalImageObjs[idx]) {
+      setImageObj((prev) =>
+        prev.map((img, i) => (i === idx ? originalImageObjs[idx] : img))
+      );
+      setImageProps((prev) => ({
+        ...prev,
+        [idx]: lastCropDatas[idx].imagePropsAtCrop,
+      }));
+      setCropArea(lastCropDatas[idx].cropRect);
+    } else {
+      // First time cropping, store original image and set default crop area
+      setOriginalImageObjs((prev) => ({
+        ...prev,
+        [idx]: imageObj[idx],
+      }));
+
+      const img = imageObj[idx];
+      let newWidth = img.width;
+      let newHeight = img.height;
+
+      if (img.width > stageWidth || img.height > stageHeight) {
+        const widthRatio = stageWidth / img.width;
+        const heightRatio = stageHeight / img.height;
+        const scale = Math.min(widthRatio, heightRatio);
+        newWidth = img.width * scale;
+        newHeight = img.height * scale;
+      }
+
+      const centeredX = (stageWidth - newWidth) / 2;
+      const centeredY = (stageHeight - newHeight) / 2;
+
+      setImageProps((prev) => ({
+        ...prev,
+        [idx]: {
+          x: centeredX,
+          y: centeredY,
+          scaleX: newWidth / img.width,
+          scaleY: newHeight / img.height,
+          rotation: 0,
+          width: img.width,
+          height: img.height,
+        },
+      }));
+
+      setCropArea({
+        x: centeredX,
+        y: centeredY,
+        width: newWidth,
+        height: newHeight,
+      });
+    }
+
+    setSelected(false);
+    setOpenColorFilter("crop");
+  };
+
+
   function updateImageColors(imgObj, newColorMap, newFillTypeMap, newGradientMap) {
     const newSvg = replaceColorsWithGradients(
       imgObj.svgText,
@@ -843,7 +894,7 @@ export default function ImageEditor() {
     setRedoStack([]);
 
     if (selectedType === "mainImage" || selectedType === "image") {
-      setImageObj(null);
+      setImageObj((prev) => prev.filter((img) => img.id !== selectedId));
       setSelectedId(null);
       setColorKeys([]);
       setColorMap({});
@@ -867,6 +918,7 @@ export default function ImageEditor() {
       setSelectedId(null);
     }
   }
+
 
   function handleLayerRightClick(e, item) {
     e.preventDefault();
@@ -1056,37 +1108,58 @@ export default function ImageEditor() {
       if (imageFile === null) {
         setImageFile(file);
       }
+      // Add to imageObj as an object
+      const img = new window.Image();
+      img.src = url;
+      img.onload = () => {
+        setImageObj((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            image: img,
+            label: "Image",
+            type: "mainImage",
+          },
+        ]);
+      };
     }
   };
 
-  const handleAddUploadedImageToCanvas = (imgObj) => {
-    const img = new window.Image();
-    img.src = imgObj.url;
-    img.onload = () => {
-      const newWidth = img.width > stageWidth ? stageWidth : img.width;
-      const newHeight = img.height > stageHeight ? stageHeight : img.height;
-      const scaleX = newWidth / img.width;
-      const scaleY = newHeight / img.height;
-      const id = Date.now().toString();
-      setImages((prev) => [
-        ...prev,
-        {
-          id,
-          image: img,
-          x: 50 + prev.length * 30,
-          y: 50 + prev.length * 30,
-          width: img.width,
-          height: img.height,
-          scaleX,
-          scaleY,
-          rotation: 0,
-          url: imgObj.url,
-          label: "Image",
-          type: "extraImage",
-        },
-      ]);
-      setSelectedId(id);
-      setSelectedType("extraImage");
+
+  useEffect(() => {
+    const newLayerList = [];
+
+    if (selectedBg) {
+      newLayerList.push({ id: "bg", type: "background", label: "Background" });
+    }
+
+    imageObj.forEach((img) => {
+      console.log(img, 'img');
+      newLayerList.push({
+        id: img.id,
+        type: img.type || "mainImage",
+        label: img.label || "Image",
+        url: img,
+      });
+    });
+
+    texts.forEach((text) => {
+      newLayerList.push({ ...text, id: text.id, type: "text", label: "Text" });
+    });
+
+    images.forEach((img) => {
+      newLayerList.push({ ...img, id: img.id, type: "extraImage", label: "Svg" });
+    });
+
+    setLayerList(newLayerList);
+  }, [selectedBg, imageObj, texts, images, showCropRect]);
+
+  const handleAddUploadedImageToCanvas = (img) => {
+    const image = new window.Image();
+    image.crossOrigin = "anonymous"; // If needed for CORS
+    image.src = img.url;
+    image.onload = () => {
+      setImageObj((prev) => [...prev, image]);
     };
   };
 
@@ -1099,9 +1172,12 @@ export default function ImageEditor() {
 
   const handleCrop = () => {
     pushUndoState();
-    const imageNode = shapeRefs.current["main-image"];
+    if (croppingIdx === null) return;
+
+    // Use the correct image node and crop node for the croppingIdx
+    const imageNode = shapeRefs.current[`image-${croppingIdx}`];
     const cropNode = shapeRefs.current["crop-rect"];
-    if (!imageNode || !cropNode || !originalImageObj) return;
+    if (!imageNode || !cropNode || !imageObj[croppingIdx]) return;
 
     const imagePropsBeforeCrop = {
       x: imageNode.x(),
@@ -1118,6 +1194,10 @@ export default function ImageEditor() {
     const cropWidth = cropNode.width() * cropNode.scaleX();
     const cropHeight = cropNode.height() * cropNode.scaleY();
 
+    // Use the correct image for cropping
+    const currentImage = imageObj[croppingIdx];
+
+    // Calculate transform relative to the current image
     const absTransform = imageNode.getAbsoluteTransform().copy().invert();
     const topLeft = absTransform.point({ x: cropX, y: cropY });
     const bottomRight = absTransform.point({
@@ -1127,43 +1207,62 @@ export default function ImageEditor() {
 
     const srcX = Math.max(0, topLeft.x);
     const srcY = Math.max(0, topLeft.y);
-    const srcWidth = Math.min(originalImageObj.width - srcX, bottomRight.x - topLeft.x);
-    const srcHeight = Math.min(originalImageObj.height - srcY, bottomRight.y - topLeft.y);
+    const srcWidth = Math.min(currentImage.width - srcX, bottomRight.x - topLeft.x);
+    const srcHeight = Math.min(currentImage.height - srcY, bottomRight.y - topLeft.y);
 
     const canvas = document.createElement("canvas");
     canvas.width = srcWidth;
     canvas.height = srcHeight;
 
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(originalImageObj, srcX, srcY, srcWidth, srcHeight, 0, 0, srcWidth, srcHeight);
+    ctx.drawImage(
+      currentImage,
+      srcX,
+      srcY,
+      srcWidth,
+      srcHeight,
+      0,
+      0,
+      srcWidth,
+      srcHeight
+    );
 
     const croppedImage = new window.Image();
     croppedImage.src = canvas.toDataURL();
     croppedImage.onload = () => {
-      setImageObj(croppedImage);
+      setImageObj((prev) =>
+        prev.map((img, idx) => (idx === croppingIdx ? croppedImage : img))
+      );
 
-      setImageProps({
-        x: cropX,
-        y: cropY,
-        scaleX: cropWidth / croppedImage.width,
-        scaleY: cropHeight / croppedImage.height,
-        width: croppedImage.width,
-        height: croppedImage.height,
-        rotation: imagePropsBeforeCrop.rotation,
-      });
+      setImageProps((prev) => ({
+        ...prev,
+        [croppingIdx]: {
+          x: cropX,
+          y: cropY,
+          scaleX: cropWidth / croppedImage.width,
+          scaleY: cropHeight / croppedImage.height,
+          width: croppedImage.width,
+          height: croppedImage.height,
+          rotation: imagePropsBeforeCrop.rotation,
+        },
+      }));
 
       setShowCropRect(false);
       setSelectedId(null);
+      setCroppingIdx(null);
 
-      setLastCropData({
-        cropRect: {
-          x: cropX,
-          y: cropY,
-          width: cropWidth,
-          height: cropHeight,
+      setLastCropDatas((prev) => ({
+        ...prev,
+        [croppingIdx]: {
+          cropRect: {
+            x: cropX,
+            y: cropY,
+            width: cropWidth,
+            height: cropHeight,
+          },
+          imagePropsAtCrop: imagePropsBeforeCrop,
         },
-        imagePropsAtCrop: imagePropsBeforeCrop,
-      });
+      }));
     };
   };
 
@@ -1171,8 +1270,13 @@ export default function ImageEditor() {
     pushUndoState();
     let newAspectRatio = null;
 
-    if (value === "original" && imageProps?.width && imageProps?.height) {
-      newAspectRatio = imageProps.width / imageProps.height;
+    if (
+      value === "original" &&
+      imageProps[croppingIdx]?.width &&
+      imageProps[croppingIdx]?.height
+    ) {
+      newAspectRatio =
+        imageProps[croppingIdx].width / imageProps[croppingIdx].height;
     } else if (value !== "none") {
       const [widthStr, heightStr] = value.split(":");
       newAspectRatio = Number(widthStr) / Number(heightStr);
@@ -1180,10 +1284,11 @@ export default function ImageEditor() {
 
     setCropAspectRatio(newAspectRatio);
 
-    if (!imageObj) return;
+    if (!imageObj[croppingIdx]) return;
 
-    let currentImageDisplayWidth = imageProps.width * imageProps.scaleX;
-    let currentImageDisplayHeight = imageProps.height * imageProps.scaleY;
+    const props = imageProps[croppingIdx];
+    let currentImageDisplayWidth = props.width * props.scaleX;
+    let currentImageDisplayHeight = props.height * props.scaleY;
 
     let newCropWidth = currentImageDisplayWidth;
     let newCropHeight = currentImageDisplayHeight;
@@ -1198,7 +1303,8 @@ export default function ImageEditor() {
       }
     }
 
-    const imageNode = imageNodeRef.current;
+    // Use the correct image node for croppingIdx
+    const imageNode = shapeRefs.current[`image-${croppingIdx}`];
     let imageClientRect = imageNode ? imageNode.getClientRect() : null;
 
     let cropX = (stageWidth - newCropWidth) / 2;
@@ -1313,7 +1419,7 @@ export default function ImageEditor() {
       const bgRemovedImage = new window.Image();
       bgRemovedImage.src = imageURL;
       bgRemovedImage.onload = () => {
-        setImageObj(bgRemovedImage);
+        setImageObj([bgRemovedImage]);
         setSelected(false);
         setShowCropRect(false);
         setImageProps({
@@ -1459,7 +1565,7 @@ export default function ImageEditor() {
       const finalImage = new window.Image();
       finalImage.src = imageURL;
       finalImage.onload = () => {
-        setImageObj(finalImage);
+        setImageObj([finalImage]);
         setSelected(false);
         setShowCropRect(false);
         setPrompt("");
@@ -1883,53 +1989,61 @@ export default function ImageEditor() {
                 />
               )}
 
-              {imageObj && (
+              {imageObj?.map((img, idx) => (
                 <KonvaImage
-                  image={imageObj}
-                  ref={(node) => (shapeRefs.current["main-image"] = node)}
-                  {...imageProps}
-                  x={imageProps.x}
-                  y={imageProps.y}
-                  scaleX={imageProps.scaleX}
-                  scaleY={imageProps.scaleY}
-                  rotation={imageProps.rotation}
-                  width={imageProps.width}
-                  height={imageProps.height}
-                  draggable={!showCropRect && !lockedLayers["main-image"]}
-                  onClick={() => !showCropRect && handleSelect("main-image", "mainImage")}
-                  onContextMenu={(e) => {
+                  key={idx}
+                  image={img?.image}
+                  ref={node => (shapeRefs.current[`image-${idx}`] = node)}
+                  {...imageProps[idx]} // imageProps should be an array/object per image
+                  x={imageProps[idx]?.x || 0}
+                  y={imageProps[idx]?.y || 0}
+                  scaleX={imageProps[idx]?.scaleX || 1}
+                  scaleY={imageProps[idx]?.scaleY || 1}
+                  rotation={imageProps[idx]?.rotation || 0}
+                  width={imageProps[idx]?.width || img.width}
+                  height={imageProps[idx]?.height || img.height}
+                  draggable={!showCropRect && !lockedLayers[`image-${idx}`]}
+                  onClick={() => !showCropRect && handleSelect(`image-${idx}`, "mainImage")}
+                  onDblClick={() => initiateCropMode(idx)}
+                  onContextMenu={e => {
                     e.evt.preventDefault();
                     handleLayerRightClick(
                       { clientX: e.evt.clientX, clientY: e.evt.clientY, preventDefault: () => { } },
-                      { id: "main-image", type: "mainImage" },
+                      { id: `image-${idx}`, type: "mainImage" }
                     );
                   }}
-                  onTransformEnd={(e) => {
-                    if (lockedLayers["main-image"]) return;
+                  onTransformEnd={e => {
+                    if (lockedLayers[`image-${idx}`]) return;
                     pushUndoState();
-                    const node = shapeRefs.current["main-image"];
-                    setImageProps({
-                      x: node.x(),
-                      y: node.y(),
-                      width: node.width(),
-                      height: node.height(),
-                      scaleX: node.scaleX(),
-                      scaleY: node.scaleY(),
-                      rotation: node.rotation(),
-                    });
-                  }}
-                  onDragEnd={(e) => {
-                    if (lockedLayers["main-image"]) return;
-                    pushUndoState();
-                    const node = shapeRefs.current["main-image"];
-                    setImageProps((prev) => ({
+                    const node = shapeRefs.current[`image-${idx}`];
+                    setImageProps(prev => ({
                       ...prev,
-                      x: node.x(),
-                      y: node.y(),
+                      [idx]: {
+                        x: node.x(),
+                        y: node.y(),
+                        width: node.width(),
+                        height: node.height(),
+                        scaleX: node.scaleX(),
+                        scaleY: node.scaleY(),
+                        rotation: node.rotation(),
+                      }
+                    }));
+                  }}
+                  onDragEnd={e => {
+                    if (lockedLayers[`image-${idx}`]) return;
+                    pushUndoState();
+                    const node = shapeRefs.current[`image-${idx}`];
+                    setImageProps(prev => ({
+                      ...prev,
+                      [idx]: {
+                        ...prev[idx],
+                        x: node.x(),
+                        y: node.y(),
+                      }
                     }));
                   }}
                 />
-              )}
+              ))}
 
               {showCropRect && (
                 <Rect
